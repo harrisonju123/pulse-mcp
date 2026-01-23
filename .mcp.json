@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ic-tracker": {
+      "command": "python",
+      "args": ["/Users/hju/PycharmProjects/ManagerStuff/server.py"],
+      "env": {
+        "IC_TRACKER_CONFIG": "/Users/hju/PycharmProjects/ManagerStuff/config.json"
+      }
+    }
+  }
+}

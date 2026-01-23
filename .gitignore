@@ -1,0 +1,30 @@
+# Configuration with secrets
+config.json
+
+# Goal files (contain personal info)
+goals/*.md
+!goals/TEMPLATE.md
+
+# Team summaries (contain aggregated personal info)
+team-summary*.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

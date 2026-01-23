@@ -1,0 +1,23 @@
+{
+  "_comment": "See README.md for full documentation. The 'confluence' section is optional.",
+  "github": {
+    "token": "ghp_xxxxxxxxxxxx",
+    "org": "yourcompany",
+    "repos": []
+  },
+  "_repos_note": "repos is optional - leave empty [] to search all org repos",
+  "confluence": {
+    "_note": "Remove this entire 'confluence' section if not using Confluence",
+    "base_url": "https://yourcompany.atlassian.net/wiki",
+    "email": "you@company.com",
+    "api_token": "your-confluence-api-token",
+    "space_keys": ["ENGG", "DOCS"]
+  },
+  "team_members": {
+    "github-username": {
+      "atlassian_account_id": "N/A",
+      "name": "Jane Smith"
+    }
+  },
+  "_atlassian_note": "Use 'N/A' for atlassian_account_id if not using Confluence"
+}

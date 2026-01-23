@@ -1,7 +1,9 @@
 """Competency mapping engine for EGF competencies."""
 
 import logging
+import math
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -66,6 +68,178 @@ COMPETENCY_PATTERNS = {
 }
 
 
+# Level expectations: threshold score expected at each level for each competency
+LEVEL_EXPECTATIONS = {
+    "P2": {
+        "Execution & Delivery": 35,
+        "Skills & Knowledge": 30,
+        "Teamwork & Communication": 30,
+        "Influence & Leadership": 15,
+    },
+    "P3": {
+        "Execution & Delivery": 45,
+        "Skills & Knowledge": 40,
+        "Teamwork & Communication": 40,
+        "Influence & Leadership": 25,
+    },
+    "P4": {
+        "Execution & Delivery": 55,
+        "Skills & Knowledge": 55,
+        "Teamwork & Communication": 50,
+        "Influence & Leadership": 45,
+    },
+    "P5": {
+        "Execution & Delivery": 60,
+        "Skills & Knowledge": 65,
+        "Teamwork & Communication": 55,
+        "Influence & Leadership": 60,
+    },
+}
+
+
+def calculate_impact_score(evidence_list: list[dict], prs_merged: list[dict] | None = None) -> float:
+    """Calculate impact multiplier based on complexity signals.
+
+    Analyzes evidence and PR data for signals of high-impact work like
+    large PRs, cross-repo work, and architecture/design contributions.
+
+    Args:
+        evidence_list: List of evidence dicts with source info.
+        prs_merged: Optional list of merged PRs with additions/deletions.
+
+    Returns:
+        Impact multiplier in range 0.8-1.2
+    """
+    impact_signals = 0
+
+    for ev in evidence_list:
+        source = ev.get("source", {})
+
+        # Large PRs (500+ lines)
+        additions = source.get("additions", 0)
+        if additions >= 1000:
+            impact_signals += 2
+        elif additions >= 500:
+            impact_signals += 1
+
+        # Cross-repo work
+        if "cross-repo" in ev.get("reasoning", "").lower():
+            impact_signals += 1
+
+        # Architecture/design work
+        if ev.get("signal_type") == "pr_pattern":
+            title = source.get("title", "").lower()
+            if any(kw in title for kw in ["architect", "design", "rfc", "proposal"]):
+                impact_signals += 2
+
+    # Also check PRs directly for large contributions
+    if prs_merged:
+        for pr in prs_merged:
+            additions = pr.get("additions", 0)
+            if additions >= 1000:
+                impact_signals += 1
+            elif additions >= 500:
+                impact_signals += 0.5
+
+    # Map to 0.8-1.2 range
+    return 0.8 + min(impact_signals, 4) * 0.1
+
+
+def calculate_competency_score(evidence_list: list[dict], impact_multiplier: float = 1.0) -> int:
+    """Calculate competency score with diminishing returns and impact weighting.
+
+    Uses a diminishing returns model where repeated evidence of the same type
+    contributes less to the score. Applies soft cap at 85.
+
+    Args:
+        evidence_list: List of evidence dicts with level and signal_type.
+        impact_multiplier: Multiplier from calculate_impact_score (0.8-1.2).
+
+    Returns:
+        Score in range 0-85 (reserve 85+ for exceptional cases)
+    """
+    if not evidence_list:
+        return 0
+
+    # Base score from evidence (diminishing returns)
+    base_score = 0.0
+    evidence_by_type: dict[str, list] = defaultdict(list)
+
+    for ev in evidence_list:
+        signal_type = ev.get("signal_type", "unknown")
+        evidence_by_type[signal_type].append(ev)
+
+        # Point values with diminishing returns per signal type
+        type_count = len(evidence_by_type[signal_type])
+        diminishing_factor = 1 / (1 + 0.3 * (type_count - 1))  # 1.0, 0.77, 0.63, 0.53...
+
+        level_points = {"strong": 20, "moderate": 12, "weak": 5}
+        points = level_points.get(ev.get("level", "weak"), 5)
+        base_score += points * diminishing_factor
+
+    # Diversity bonus (breadth across signal types)
+    unique_types = len(evidence_by_type)
+    diversity_bonus = min(unique_types * 3, 15)  # Max 15 points for 5+ types
+
+    # Combine and apply impact
+    raw_score = (base_score + diversity_bonus) * impact_multiplier
+
+    # Soft cap at 85 (sigmoid-like compression above 60)
+    if raw_score > 60:
+        excess = raw_score - 60
+        compressed = 60 + (25 * (1 - math.exp(-excess / 30)))  # Asymptotically approaches 85
+        return min(int(compressed), 85)
+
+    return min(int(raw_score), 85)
+
+
+def get_score_label(score: int) -> str:
+    """Map score to human-readable label.
+
+    Args:
+        score: Competency score (0-85).
+
+    Returns:
+        Label string: Gap, Developing, Proficient, Strong, or Exceptional
+    """
+    if score >= 76:
+        return "Exceptional"
+    elif score >= 61:
+        return "Strong"
+    elif score >= 41:
+        return "Proficient"
+    elif score >= 21:
+        return "Developing"
+    else:
+        return "Gap"
+
+
+def get_vs_target_label(score: int, competency: str, level: str | None) -> str | None:
+    """Determine if score meets level expectations.
+
+    Args:
+        score: Competency score.
+        competency: Competency name.
+        level: Engineer level (P2, P3, P4, P5) or None.
+
+    Returns:
+        Label: "Exceeding", "Meeting", "Developing", "Gap", or None if no level.
+    """
+    if not level or level not in LEVEL_EXPECTATIONS:
+        return None
+
+    threshold = LEVEL_EXPECTATIONS[level].get(competency, 50)
+
+    if score >= threshold + 15:
+        return "Exceeding"
+    elif score >= threshold:
+        return "Meeting"
+    elif score >= threshold - 15:
+        return "Developing"
+    else:
+        return "Gap"
+
+
 def analyze_pr_for_competencies(pr_title: str, pr_description: str | None = None) -> list[CompetencyEvidence]:
     """Analyze a PR title and description for competency signals.
 
@@ -100,23 +274,26 @@ def analyze_contributions_for_competencies(
     reviews_given: list[dict],
     distribution: dict | None = None,
     review_turnaround: dict | None = None,
+    level: str | None = None,
 ) -> dict:
     """Analyze contribution data to map to EGF competencies.
 
     Args:
-        prs_merged: List of merged PRs.
+        prs_merged: List of merged PRs (may include additions/deletions stats).
         reviews_given: List of code reviews given.
         distribution: Optional distribution data (by_repo, by_area).
         review_turnaround: Optional review turnaround metrics.
+        level: Optional engineer level (P2, P3, P4, P5) for relative scoring.
 
     Returns:
-        Dict mapping competencies to evidence lists and scores.
+        Dict mapping competencies to evidence lists, scores, and labels.
     """
     results = {
         competency.value: {
             "evidence": [],
             "evidence_count": 0,
-            "score": 0,  # 0-100 based on evidence strength
+            "score": 0,
+            "score_label": "Gap",
         }
         for competency in Competency
     }
@@ -216,22 +393,26 @@ def analyze_contributions_for_competencies(
                 "reasoning": f"Review-to-PR ratio of {review_ratio:.1f}x suggests significant investment in helping teammates",
             })
 
-    # Calculate scores based on evidence
-    for competency in results:
-        evidence_list = results[competency]["evidence"]
-        results[competency]["evidence_count"] = len(evidence_list)
+    # Calculate impact multiplier from PR stats
+    all_evidence = []
+    for competency_data in results.values():
+        all_evidence.extend(competency_data["evidence"])
+    impact_multiplier = calculate_impact_score(all_evidence, prs_merged)
 
-        # Score: weighted by evidence level
-        score = 0
-        for ev in evidence_list:
-            level = ev.get("level", "weak")
-            if level == "strong":
-                score += 30
-            elif level == "moderate":
-                score += 15
-            else:
-                score += 5
-        results[competency]["score"] = min(score, 100)
+    # Calculate scores using new algorithm with diminishing returns
+    for competency_name in results:
+        evidence_list = results[competency_name]["evidence"]
+        results[competency_name]["evidence_count"] = len(evidence_list)
+
+        # Calculate score with diminishing returns and impact weighting
+        score = calculate_competency_score(evidence_list, impact_multiplier)
+        results[competency_name]["score"] = score
+        results[competency_name]["score_label"] = get_score_label(score)
+
+        # Add level-relative comparison if level is provided
+        vs_target = get_vs_target_label(score, competency_name, level)
+        if vs_target:
+            results[competency_name]["vs_target"] = vs_target
 
     return results
 
@@ -243,22 +424,30 @@ def get_competency_summary(analysis: dict) -> dict:
         analysis: Output from analyze_contributions_for_competencies.
 
     Returns:
-        Summary with top competencies and gaps.
+        Summary with top competencies, gaps, and score labels.
     """
     # Sort competencies by score
     sorted_competencies = sorted(
-        [(c, data["score"], data["evidence_count"]) for c, data in analysis.items()],
+        [
+            (c, data["score"], data["evidence_count"], data.get("score_label", "Gap"))
+            for c, data in analysis.items()
+        ],
         key=lambda x: (x[1], x[2]),
         reverse=True,
     )
 
-    # Identify strengths (score >= 50) and gaps (score < 20)
-    strengths = [c for c, score, _ in sorted_competencies if score >= 50]
-    growth_areas = [c for c, score, _ in sorted_competencies if score < 20]
+    # Identify strengths (score >= 50) and gaps (score < 30)
+    # New thresholds: strengths at Proficient+, gaps at Developing or below
+    strengths = [c for c, score, _, _ in sorted_competencies if score >= 50]
+    growth_areas = [c for c, score, _, _ in sorted_competencies if score < 30]
 
     return {
-        "top_competencies": [{"competency": c, "score": s} for c, s, _ in sorted_competencies[:2]],
+        "top_competencies": [
+            {"competency": c, "score": s, "label": label}
+            for c, s, _, label in sorted_competencies[:2]
+        ],
         "strengths": strengths,
         "growth_areas": growth_areas,
-        "scores": {c: s for c, s, _ in sorted_competencies},
+        "scores": {c: s for c, s, _, _ in sorted_competencies},
+        "labels": {c: label for c, _, _, label in sorted_competencies},
     }

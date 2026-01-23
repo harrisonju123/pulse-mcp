@@ -722,7 +722,18 @@ async def handle_get_competency_analysis(
                     "title": pr.title,
                     "repo": pr.repo,
                     "url": pr.url,
+                    "additions": 0,
+                    "deletions": 0,
                 }
+
+                # Get PR stats for impact calculation
+                try:
+                    stats = client.get_pr_stats(config.github.org, pr.repo, pr.number)
+                    pr_data["additions"] = stats.get("additions", 0)
+                    pr_data["deletions"] = stats.get("deletions", 0)
+                except Exception:
+                    pass
+
                 prs_merged.append(pr_data)
                 by_repo[pr.repo] += 1
 

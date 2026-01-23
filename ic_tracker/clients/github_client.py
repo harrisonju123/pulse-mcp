@@ -168,13 +168,14 @@ class GitHubClient:
         method: str,
         path: str,
         params: dict | None = None,
+        headers: dict | None = None,
     ) -> dict[str, Any]:
         """Make an API request with retry logic."""
         url = f"https://api.github.com{path}"
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.session.request(method, url, params=params)
+                response = self.session.request(method, url, params=params, headers=headers, timeout=30)
 
                 if response.status_code == 403:
                     remaining = response.headers.get("X-RateLimit-Remaining", "0")
@@ -259,3 +260,113 @@ class GitHubClient:
         """Extract repo name from GitHub API URL."""
         match = re.search(r"/repos/[^/]+/([^/]+)", url)
         return match.group(1) if match else ""
+
+    def get_pr_timeline(self, owner: str, repo: str, number: int) -> list[dict[str, Any]]:
+        """Get timeline events for a PR.
+
+        Returns events including review_requested and reviewed events,
+        which can be used to calculate review turnaround time.
+
+        Args:
+            owner: Repository owner.
+            repo: Repository name.
+            number: PR number.
+
+        Returns:
+            List of timeline event dicts.
+        """
+        events = []
+        page = 1
+        # Timeline API requires special Accept header for full event details
+        timeline_headers = {"Accept": "application/vnd.github.mockingbird-preview+json"}
+
+        while True:
+            params = {"per_page": PAGE_SIZE, "page": page}
+            data = self._request(
+                "GET",
+                f"/repos/{owner}/{repo}/issues/{number}/timeline",
+                params=params,
+                headers=timeline_headers,
+            )
+
+            if not data:
+                break
+
+            events.extend(data)
+
+            if len(data) < PAGE_SIZE:
+                break
+            page += 1
+
+        return events
+
+    def get_pr_files(self, owner: str, repo: str, number: int) -> list[dict[str, Any]]:
+        """Get files changed in a PR.
+
+        Args:
+            owner: Repository owner.
+            repo: Repository name.
+            number: PR number.
+
+        Returns:
+            List of file dicts with filename, status, additions, deletions.
+        """
+        files = []
+        page = 1
+
+        while True:
+            params = {"per_page": PAGE_SIZE, "page": page}
+            data = self._request(
+                "GET",
+                f"/repos/{owner}/{repo}/pulls/{number}/files",
+                params=params,
+            )
+
+            if not data:
+                break
+
+            files.extend(data)
+
+            if len(data) < PAGE_SIZE:
+                break
+            page += 1
+
+        return files
+
+    def get_reviews_for_pr(
+        self,
+        owner: str,
+        repo: str,
+        number: int,
+    ) -> list[dict[str, Any]]:
+        """Get all reviews submitted on a PR.
+
+        Args:
+            owner: Repository owner.
+            repo: Repository name.
+            number: PR number.
+
+        Returns:
+            List of review dicts with user, state, submitted_at.
+        """
+        reviews = []
+        page = 1
+
+        while True:
+            params = {"per_page": PAGE_SIZE, "page": page}
+            data = self._request(
+                "GET",
+                f"/repos/{owner}/{repo}/pulls/{number}/reviews",
+                params=params,
+            )
+
+            if not data:
+                break
+
+            reviews.extend(data)
+
+            if len(data) < PAGE_SIZE:
+                break
+            page += 1
+
+        return reviews

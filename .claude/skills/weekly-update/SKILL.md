@@ -2,9 +2,10 @@
 description: This skill generates weekly status updates. Use when asked to "write weekly update", "create status report", "summarize my week", "generate standup", "what did I work on", or "team update".
 allowed-tools:
   - mcp__ic-tracker__get_github_contributions
-  - mcp__ic-tracker__get_jira_contributions
   - mcp__ic-tracker__get_confluence_contributions
   - mcp__ic-tracker__get_team_members
+  - mcp__ic-tracker__get_team_bandwidth
+  - mcp__ic-tracker__search_jira_issues
   - Read
   - Glob
 ---
@@ -25,8 +26,10 @@ Generate concise weekly status updates for individuals or teams.
 
 3. **Fetch contribution data**
    - `mcp__ic-tracker__get_github_contributions` with `days: 7`
-   - `mcp__ic-tracker__get_jira_contributions` with `days: 7`
    - `mcp__ic-tracker__get_confluence_contributions` with `days: 7`
+   - For Jira work: `mcp__ic-tracker__search_jira_issues` with JQL like:
+     - `assignee = "account-id" AND updated >= -7d ORDER BY updated DESC`
+   - For team bandwidth: `mcp__ic-tracker__get_team_bandwidth`
 
 4. **Optionally read goals** for context on how work aligns with objectives
 

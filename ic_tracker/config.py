@@ -2,14 +2,23 @@
 
 import json
 import os
+import re
 from pathlib import Path
 
-from .models import Config, ConfluenceConfig, GitHubConfig, TeamMember
+from .models import Config, ConfluenceConfig, GitHubConfig, JiraConfig, TeamMember
+
+# Pattern for valid Jira project keys
+PROJECT_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*$")
 
 
 class ConfigError(Exception):
     """Raised when configuration is invalid or missing."""
     pass
+
+
+def _validate_project_key(key: str) -> bool:
+    """Check if a string is a valid Jira project key."""
+    return bool(PROJECT_KEY_PATTERN.match(key))
 
 
 def load_config(config_path: str | None = None) -> Config:
@@ -95,10 +104,39 @@ def _parse_config(data: dict) -> Config:
             name=member_data["name"],
         )
 
+    jira_config = None
+    if "jira" in data:
+        jira_data = data["jira"]
+        _validate_required_keys(
+            jira_data,
+            ["base_url", "email", "api_token", "project_keys", "story_point_field"],
+            "jira"
+        )
+        if not jira_data["project_keys"]:
+            raise ConfigError("jira.project_keys cannot be empty")
+
+        # Validate project keys to prevent JQL injection
+        invalid_keys = [k for k in jira_data["project_keys"] if not _validate_project_key(k)]
+        if invalid_keys:
+            raise ConfigError(
+                f"Invalid Jira project key(s): {', '.join(invalid_keys)}. "
+                "Project keys must be uppercase letters and numbers, starting with a letter."
+            )
+
+        jira_config = JiraConfig(
+            base_url=jira_data["base_url"].strip().rstrip("/"),
+            email=jira_data["email"],
+            api_token=jira_data["api_token"],
+            project_keys=jira_data["project_keys"],
+            story_point_field=jira_data["story_point_field"],
+            epic_link_field=jira_data.get("epic_link_field", "customfield_10014"),
+        )
+
     return Config(
         github=github_config,
         team_members=team_members,
         confluence=confluence_config,
+        jira=jira_config,
     )
 
 

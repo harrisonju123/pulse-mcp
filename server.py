@@ -17,10 +17,23 @@ from ic_tracker.tools.confluence_tools import (
     get_confluence_tools,
     handle_get_confluence_contributions,
 )
+from ic_tracker.tools.feedback_tools import (
+    get_feedback_tools,
+    handle_get_peer_feedback,
+)
 from ic_tracker.tools.github_tools import (
     get_github_tools,
+    handle_get_competency_analysis,
+    handle_get_contribution_distribution,
+    handle_get_contribution_trends,
     handle_get_github_contributions,
     handle_get_team_members,
+)
+from ic_tracker.tools.jira_tools import (
+    get_jira_tools,
+    handle_get_initiative_roadmap,
+    handle_get_team_bandwidth,
+    handle_search_jira_issues,
 )
 
 logging.basicConfig(
@@ -38,8 +51,11 @@ config = None
 async def list_tools():
     """List available MCP tools."""
     tools = get_github_tools()
+    tools += get_feedback_tools()
     if config and config.confluence:
         tools += get_confluence_tools()
+    if config and config.jira:
+        tools += get_jira_tools()
     return tools
 
 
@@ -58,6 +74,10 @@ async def call_tool(name: str, arguments: dict):
     tools_requiring_username = (
         "get_github_contributions",
         "get_confluence_contributions",
+        "get_contribution_trends",
+        "get_contribution_distribution",
+        "get_competency_analysis",
+        "get_peer_feedback",
     )
     if name in tools_requiring_username:
         if not arguments.get("github_username"):
@@ -74,6 +94,19 @@ async def call_tool(name: str, arguments: dict):
                 type="text",
                 text=json.dumps({"error": "days must be an integer between 1 and 365"})
             )]
+
+    # Validate required parameters for Jira tools
+    if name == "get_initiative_roadmap" and not arguments.get("initiative_key"):
+        return [TextContent(
+            type="text",
+            text=json.dumps({"error": "initiative_key is required"})
+        )]
+
+    if name == "search_jira_issues" and not arguments.get("jql"):
+        return [TextContent(
+            type="text",
+            text=json.dumps({"error": "jql is required"})
+        )]
 
     try:
         if name == "get_github_contributions":
@@ -93,6 +126,53 @@ async def call_tool(name: str, arguments: dict):
                 days=arguments.get("days", 14),
                 start_date=arguments.get("start_date"),
                 end_date=arguments.get("end_date"),
+            )
+        elif name == "get_initiative_roadmap":
+            result = await handle_get_initiative_roadmap(
+                config,
+                initiative_key=arguments.get("initiative_key"),
+            )
+        elif name == "get_team_bandwidth":
+            result = await handle_get_team_bandwidth(
+                config,
+                github_username=arguments.get("github_username"),
+                initiative_key=arguments.get("initiative_key"),
+            )
+        elif name == "search_jira_issues":
+            result = await handle_search_jira_issues(
+                config,
+                jql=arguments.get("jql"),
+                max_results=arguments.get("max_results", 50),
+            )
+        elif name == "get_contribution_trends":
+            result = await handle_get_contribution_trends(
+                config,
+                github_username=arguments.get("github_username"),
+                period_type=arguments.get("period_type", "biweekly"),
+                num_periods=arguments.get("num_periods", 4),
+            )
+        elif name == "get_contribution_distribution":
+            result = await handle_get_contribution_distribution(
+                config,
+                github_username=arguments.get("github_username"),
+                days=arguments.get("days", 90),
+                start_date=arguments.get("start_date"),
+                end_date=arguments.get("end_date"),
+                max_prs=arguments.get("max_prs", 25),
+            )
+        elif name == "get_competency_analysis":
+            result = await handle_get_competency_analysis(
+                config,
+                github_username=arguments.get("github_username"),
+                days=arguments.get("days", 90),
+                start_date=arguments.get("start_date"),
+                end_date=arguments.get("end_date"),
+            )
+        elif name == "get_peer_feedback":
+            result = await handle_get_peer_feedback(
+                config,
+                github_username=arguments.get("github_username"),
+                period=arguments.get("period"),
             )
         else:
             result = {"error": f"Unknown tool: {name}"}
@@ -167,6 +247,29 @@ def validate_config() -> int:
         except requests.RequestException as e:
             print(f"✗ Confluence: connection error - {e}")
             errors.append("Confluence connection failed")
+
+    # Test Jira token if configured
+    if cfg.jira:
+        try:
+            resp = requests.get(
+                f"{cfg.jira.base_url}/rest/api/3/myself",
+                auth=(cfg.jira.email, cfg.jira.api_token),
+                headers={"Accept": "application/json"},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                email = resp.json().get("emailAddress", "unknown")
+                print(f"✓ Jira: authenticated as {email}")
+            elif resp.status_code == 401:
+                print("✗ Jira: token is invalid or expired")
+                print("  Fix: https://id.atlassian.com/manage-profile/security/api-tokens")
+                errors.append("Jira authentication failed")
+            else:
+                print(f"✗ Jira: unexpected status {resp.status_code}")
+                errors.append(f"Jira returned status {resp.status_code}")
+        except requests.RequestException as e:
+            print(f"✗ Jira: connection error - {e}")
+            errors.append("Jira connection failed")
 
     # List team members
     if len(cfg.team_members) == 0:

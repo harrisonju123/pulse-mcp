@@ -55,6 +55,10 @@ Current leveling as outlined in the 2025 Engineering IC Job Architecture:
 - [Specific action 1]
 - [Specific action 2]
 
+**Jira Epics/Initiatives:** (optional, for tracking)
+- [PROJ-123] - [Epic name]
+- [PROJ-456] - [Initiative name]
+
 **Key Results:**
 - [Measurable outcome 1]
 - [Measurable outcome 2]

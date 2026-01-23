@@ -6,7 +6,7 @@ MCP server for engineering managers. Pulls GitHub, Confluence, and Jira data for
 - GitHub contributions (PRs, reviews, lines changed)
 - Confluence activity (pages, comments)
 - Jira planning (initiative roadmaps, team bandwidth, issue search)
-- Skills for performance reviews and weekly updates
+- Skills for 1:1 prep, performance reviews, and weekly updates
 
 ## GitHub-Only Quick Start
 
@@ -216,6 +216,7 @@ After setup, just ask Claude naturally:
 "What's the team's bandwidth right now?"
 "Get my GitHub contributions for the last 30 days"
 "Search for open bugs in PROJ"
+"Prep for my 1:1 with Jordan"
 "Write a performance review for Jordan"
 "Generate my weekly update"
 ```
@@ -226,6 +227,7 @@ This project includes custom Claude Code skills that use the MCP tools:
 
 | Skill | Trigger | Description |
 |-------|---------|-------------|
+| `/one-on-one-prep` | "prep for 1:1 with [name]" | Generates actionable 1:1 meeting prep with blockers, goals, and discussion questions |
 | `/performance-review` | "write performance review for [name]" | Generates comprehensive review using GitHub, Confluence, Jira data and goals |
 | `/weekly-update` | "write my weekly update" | Generates weekly status report from contributions |
 

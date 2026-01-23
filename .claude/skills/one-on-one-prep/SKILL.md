@@ -29,9 +29,11 @@ Generate concise, actionable 1:1 meeting prep documents by aggregating data from
    - Extract open story points and in-progress items by epic
 
 4. **Check for blockers and risks via Jira**
+   - Get Jira account ID from `get_team_members` response (jira_account_id field)
    - Blocked items: `assignee = "<jira-account-id>" AND status = "Blocked"`
    - Stale in-progress: `assignee = "<jira-account-id>" AND status = "In Progress" AND updated < -7d`
    - Overdue: `assignee = "<jira-account-id>" AND duedate < now() AND status != Done`
+   - Note: Status names vary by project. Adjust "Blocked"/"In Progress" to match your workflow (e.g., `status in ("In Progress", "In Review")`).
 
 5. **Surface recent peer feedback (if any)**
    - `mcp__ic-tracker__get_peer_feedback` for this user
@@ -40,6 +42,7 @@ Generate concise, actionable 1:1 meeting prep documents by aggregating data from
 6. **Read goals file**
    - Find goal file: `goals/<name>.md` (use Glob if needed)
    - Extract performance goals and key results for alignment context
+   - If no goals file exists, skip the Goals section and add a question: "Do you have documented goals we should set up?"
 
 7. **Generate prep document**
 
@@ -50,9 +53,9 @@ Generate concise, actionable 1:1 meeting prep documents by aggregating data from
 [Date] | Last 14 days
 
 ## Stats
-| PRs | Reviews | Open Points | Blocked |
-|-----|---------|-------------|---------|
-| X   | X       | X           | X       |
+| PRs | Lines | Reviews | Open Points | Blocked |
+|-----|-------|---------|-------------|---------|
+| X   | +X/-Y | X       | X           | X       |
 
 ## Recent Work
 - [PR title] ([repo])

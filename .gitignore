@@ -8,6 +8,10 @@ team-chronicle/
 goals/*.md
 !goals/TEMPLATE.md
 
+# Company-specific reference docs (keep .example.md versions in repo)
+.claude/skills/performance-review/references/engineering-growth-framework.md
+.claude/skills/performance-review/references/engineering-growth-rubric.md
+
 # Feedback files (contain personal info)
 feedback/
 

@@ -1,7 +1,6 @@
-# JustGrow Performance Goals + Career Growth Plan
+# Performance Goals + Career Growth Plan
 
-> **Note:** This template uses Justworks-specific terminology (ECGF, COGIS, P-levels).
-> Adapt the competency frameworks and values to match your organization.
+> **Note:** Adapt this template to match your organization's competency frameworks and values.
 
 **Name:** [Full Name]
 **Title:** [Current Title]
@@ -13,13 +12,14 @@
 
 ## Career Outlook Snapshot
 
-### Current Leveling
+### Current Level
 
-Current leveling as outlined in the 2025 Engineering IC Job Architecture:
-- P2 - Associate Engineer
-- P3 - Engineer
-- P4 - Senior Engineer
-- P5 - Staff Engineer
+Current leveling per your engineering career ladder:
+- Junior Engineer
+- Engineer
+- Senior Engineer
+- Staff Engineer
+- Principal Engineer
 
 **Time in Role (in months):** [X]
 
@@ -45,11 +45,11 @@ Current leveling as outlined in the 2025 Engineering IC Job Architecture:
 
 **Goal:** [Description of what you want to achieve and by when]
 
-**ECGF Competency:**
-- [e.g., Teamwork & Communication, Skills & Knowledge, Execution & Delivery]
+**Competency Area:**
+- [e.g., Teamwork & Communication, Skills & Knowledge, Execution & Delivery, Influence & Leadership]
 
-**COGIS Values:**
-- [e.g., Camaraderie, Openness, Grit, Integrity, Simplicity]
+**Company Values:**
+- [Your company's core values that this goal supports]
 
 **Key Initiatives:**
 - [Specific action 1]
@@ -75,10 +75,10 @@ Current leveling as outlined in the 2025 Engineering IC Job Architecture:
 
 **Goal:** [Description]
 
-**ECGF Competency:**
+**Competency Area:**
 - [Competency]
 
-**COGIS Values:**
+**Company Values:**
 - [Value]
 
 **Key Initiatives:**
@@ -99,10 +99,10 @@ Current leveling as outlined in the 2025 Engineering IC Job Architecture:
 
 **Goal:** [Description]
 
-**ECGF Competency:**
+**Competency Area:**
 - [Competency]
 
-**COGIS Values:**
+**Company Values:**
 - [Value]
 
 **Key Initiatives:**
@@ -132,5 +132,5 @@ Current leveling as outlined in the 2025 Engineering IC Job Architecture:
 - HARD goals
 
 **References:**
-- Engineering Career Growth Framework
-- COGIS Playbook
+- Your company's Engineering Career Growth Framework
+- Your company's Values/Culture documentation

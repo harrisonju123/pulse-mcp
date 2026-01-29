@@ -16,6 +16,15 @@ from ..utils import get_file_extension, infer_area_from_path, parse_date_range
 logger = logging.getLogger(__name__)
 
 
+def _ensure_timezone_aware(dt: datetime | None) -> datetime | None:
+    """Ensure datetime is timezone-aware (assumes UTC if naive)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _validate_team_member(config: Config, github_username: str) -> dict | None:
     """Validate that github_username is a configured team member.
 
@@ -89,13 +98,28 @@ def get_github_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="get_teams",
+            description=(
+                "Get list of configured teams with their names and member counts."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
             name="get_team_members",
             description=(
                 "Get list of configured team members with their names and usernames."
             ),
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "team": {
+                        "type": "string",
+                        "description": "Optional team ID to filter members by. If not provided, returns all members across all teams.",
+                    },
+                },
             },
         ),
         Tool(
@@ -242,10 +266,11 @@ async def handle_get_github_contributions(
             logger.error(f"GitHub PR search failed: {e}")
             return {"error": f"Failed to fetch GitHub PRs: {str(e)}"}
 
-        for pr in prs:
-            if not pr.merged:
-                continue
+        # Filter to merged PRs and fetch stats in parallel
+        merged_prs = [pr for pr in prs if pr.merged]
+        stats_map = client.get_pr_stats_batch(merged_prs)
 
+        for pr in merged_prs:
             pr_data = {
                 "number": pr.number,
                 "title": pr.title,
@@ -253,16 +278,11 @@ async def handle_get_github_contributions(
                 "url": pr.url,
             }
 
-            try:
-                stats = client.get_pr_stats(config.github.org, pr.repo, pr.number)
-                pr_data["additions"] = stats["additions"]
-                pr_data["deletions"] = stats["deletions"]
-                contributions.total_additions += stats["additions"]
-                contributions.total_deletions += stats["deletions"]
-            except Exception as e:
-                logger.warning(f"Failed to get stats for PR #{pr.number}: {e}")
-                pr_data["additions"] = 0
-                pr_data["deletions"] = 0
+            stats = stats_map.get((pr.repo, pr.number), {"additions": 0, "deletions": 0})
+            pr_data["additions"] = stats["additions"]
+            pr_data["deletions"] = stats["deletions"]
+            contributions.total_additions += stats["additions"]
+            contributions.total_deletions += stats["deletions"]
 
             contributions.prs_merged.append(pr_data)
 
@@ -325,30 +345,92 @@ async def handle_get_github_contributions(
     return result
 
 
-async def handle_get_team_members(config: Config) -> dict:
-    """Get list of configured team members.
+async def handle_get_teams(config: Config) -> dict:
+    """Get list of configured teams.
 
     Args:
         config: Application configuration.
 
     Returns:
-        Dict containing list of team members with their details.
+        Dict containing list of teams with names, member counts, and members.
     """
-    members = []
-    for github_username, member in config.team_members.items():
-        members.append({
-            "github_username": github_username,
-            "atlassian_account_id": member.atlassian_account_id,
-            "name": member.name,
+    teams_list = []
+    total_members = 0
+
+    for team_id, team in config.teams.items():
+        members = [
+            {
+                "github_username": username,
+                "atlassian_account_id": member.atlassian_account_id,
+                "name": member.name,
+            }
+            for username, member in team.members.items()
+        ]
+        teams_list.append({
+            "id": team_id,
+            "name": team.name,
+            "member_count": len(team.members),
+            "members": members,
         })
+        total_members += len(team.members)
 
     return {
-        "team_members": members,
-        "count": len(members),
+        "teams": teams_list,
+        "total_teams": len(teams_list),
+        "total_members": total_members,
     }
 
 
-MAX_TURNAROUND_SAMPLES = 10  # Limit API calls for turnaround calculation
+async def handle_get_team_members(config: Config, team: str | None = None) -> dict:
+    """Get list of configured team members.
+
+    Args:
+        config: Application configuration.
+        team: Optional team ID to filter by.
+
+    Returns:
+        Dict containing list of team members with their details.
+    """
+    if team is not None:
+        # Filter by specific team
+        if team not in config.teams:
+            return {
+                "error": f"Unknown team: {team}. Available teams: {', '.join(config.teams.keys())}"
+            }
+        team_obj = config.teams[team]
+        members = [
+            {
+                "github_username": username,
+                "atlassian_account_id": member.atlassian_account_id,
+                "name": member.name,
+                "team": team,
+            }
+            for username, member in team_obj.members.items()
+        ]
+        return {
+            "team_members": members,
+            "count": len(members),
+            "team": {"id": team, "name": team_obj.name},
+        }
+    else:
+        # Return all members across all teams
+        members = []
+        for team_id, team_obj in config.teams.items():
+            for username, member in team_obj.members.items():
+                members.append({
+                    "github_username": username,
+                    "atlassian_account_id": member.atlassian_account_id,
+                    "name": member.name,
+                    "team": team_id,
+                })
+
+        return {
+            "team_members": members,
+            "count": len(members),
+        }
+
+
+MAX_TURNAROUND_SAMPLES = 5  # Limit API calls for turnaround calculation
 
 
 def _calculate_review_turnarounds(
@@ -380,11 +462,18 @@ def _calculate_review_turnarounds(
     # Get PRs reviewed by this user
     reviews = client.get_reviews_by_user(reviewer_username, since, until)
 
-    # Limit to max_samples to avoid excessive API calls (2 calls per review)
-    for review in reviews[:max_samples]:
+    # Limit to max_samples and fetch all turnaround data in parallel
+    reviews_to_analyze = reviews[:max_samples]
+    turnaround_data_map = client.get_turnaround_data_batch(reviews_to_analyze)
+
+    for review in reviews_to_analyze:
+        data = turnaround_data_map.get((review.repo, review.pr_number))
+        if not data:
+            continue
+
         try:
-            # Get the timeline for this PR to find when review was requested
-            timeline = client.get_pr_timeline(org, review.repo, review.pr_number)
+            timeline = data.get("timeline", [])
+            pr_reviews = data.get("reviews", [])
 
             # Find when this reviewer was requested
             requested_at = None
@@ -398,7 +487,6 @@ def _calculate_review_turnarounds(
 
             # Get actual review submission time from reviews endpoint
             reviewed_at = None
-            pr_reviews = client.get_reviews_for_pr(org, review.repo, review.pr_number)
             for pr_review in pr_reviews:
                 reviewer = pr_review.get("user", {})
                 if reviewer.get("login", "").lower() == reviewer_username.lower():
@@ -408,7 +496,6 @@ def _calculate_review_turnarounds(
 
             turnaround_hours = None
             if requested_at and reviewed_at and reviewed_at > requested_at:
-                # Only calculate if review came after request (handles clock skew edge cases)
                 delta = reviewed_at - requested_at
                 turnaround_hours = delta.total_seconds() / 3600
 
@@ -423,7 +510,7 @@ def _calculate_review_turnarounds(
             })
 
         except Exception as e:
-            logger.warning(f"Failed to get turnaround for PR #{review.pr_number}: {e}")
+            logger.warning(f"Failed to process turnaround for PR #{review.pr_number}: {e}")
             continue
 
     return turnarounds
@@ -478,6 +565,22 @@ async def handle_get_contribution_trends(
     warnings = []
 
     with GitHubClient(config.github) as client:
+        # Fetch all PRs and reviews for the entire date range at once
+        overall_start = periods[0][0]
+        overall_end = periods[-1][1]
+
+        try:
+            all_prs = client.search_prs(github_username, overall_start, overall_end)
+            all_reviews = client.get_reviews_by_user(github_username, overall_start, overall_end)
+        except Exception as e:
+            logger.error(f"GitHub search failed: {e}")
+            return {"error": f"Failed to fetch GitHub data: {str(e)}"}
+
+        # Fetch stats for all merged PRs in parallel
+        merged_prs = [pr for pr in all_prs if pr.merged]
+        stats_map = client.get_pr_stats_batch(merged_prs)
+
+        # Group PRs and reviews by period
         for start_date, end_date, period_idx in periods:
             # Generate period label
             if period_type == "weekly":
@@ -497,26 +600,20 @@ async def handle_get_contribution_trends(
                 "lines_removed": 0,
             }
 
-            try:
-                # Get PRs for this period
-                prs = client.search_prs(github_username, start_date, end_date)
-                for pr in prs:
-                    if pr.merged:
-                        period_data["prs_merged"] += 1
-                        try:
-                            stats = client.get_pr_stats(config.github.org, pr.repo, pr.number)
-                            period_data["lines_added"] += stats.get("additions", 0)
-                            period_data["lines_removed"] += stats.get("deletions", 0)
-                        except Exception:
-                            pass
+            # Filter PRs for this period
+            for pr in merged_prs:
+                pr_created = _ensure_timezone_aware(pr.created_at)
+                if pr_created and start_date <= pr_created <= end_date:
+                    period_data["prs_merged"] += 1
+                    stats = stats_map.get((pr.repo, pr.number), {"additions": 0, "deletions": 0})
+                    period_data["lines_added"] += stats.get("additions", 0)
+                    period_data["lines_removed"] += stats.get("deletions", 0)
 
-                # Get reviews for this period
-                reviews = client.get_reviews_by_user(github_username, start_date, end_date)
-                period_data["reviews_given"] = len(reviews)
-
-            except Exception as e:
-                logger.warning(f"Failed to get data for period {label}: {e}")
-                warnings.append(f"Incomplete data for {label}")
+            # Filter reviews for this period (based on PR creation date)
+            for review in all_reviews:
+                review_submitted = _ensure_timezone_aware(review.submitted_at)
+                if review_submitted and start_date <= review_submitted <= end_date:
+                    period_data["reviews_given"] += 1
 
             period_contributions.append(period_data)
 
@@ -601,40 +698,35 @@ async def handle_get_contribution_distribution(
         merged_prs = [pr for pr in prs if pr.merged]
         total_merged = len(merged_prs)
 
-        # Limit file analysis to max_prs to avoid excessive API calls
-        prs_to_analyze = merged_prs[:max_prs]
-        prs_analyzed_for_files = 0
-
+        # Count by repo for all merged PRs
         for pr in merged_prs:
             by_repo[pr.repo] += 1
 
-            # Only fetch files for limited number of PRs
-            if prs_analyzed_for_files < max_prs:
-                try:
-                    files = client.get_pr_files(config.github.org, pr.repo, pr.number)
-                    prs_analyzed_for_files += 1
-                    for file_info in files:
-                        filename = file_info.get("filename", "")
-                        if not filename:
-                            continue
+        # Limit file analysis to max_prs and fetch in parallel
+        prs_to_analyze = merged_prs[:max_prs]
+        files_map = client.get_pr_files_batch(prs_to_analyze)
+        prs_analyzed_for_files = len(files_map)
 
-                        area = infer_area_from_path(filename)
-                        ext = get_file_extension(filename)
+        for pr in prs_to_analyze:
+            files = files_map.get((pr.repo, pr.number), [])
+            for file_info in files:
+                filename = file_info.get("filename", "")
+                if not filename:
+                    continue
 
-                        by_area[area] += 1
-                        if ext:
-                            by_file_type[ext] += 1
+                area = infer_area_from_path(filename)
+                ext = get_file_extension(filename)
 
-                        files_touched.append({
-                            "path": filename,
-                            "repo": pr.repo,
-                            "area": area,
-                            "pr_number": pr.number,
-                        })
+                by_area[area] += 1
+                if ext:
+                    by_file_type[ext] += 1
 
-                except Exception as e:
-                    logger.warning(f"Failed to get files for PR #{pr.number}: {e}")
-                    warnings.append(f"Missing files for PR #{pr.number}")
+                files_touched.append({
+                    "path": filename,
+                    "repo": pr.repo,
+                    "area": area,
+                    "pr_number": pr.number,
+                })
 
     # Sort distributions by count descending
     sorted_by_repo = dict(sorted(by_repo.items(), key=lambda x: x[1], reverse=True))
@@ -713,40 +805,32 @@ async def handle_get_competency_analysis(
             by_repo: dict[str, int] = defaultdict(int)
             by_area: dict[str, int] = defaultdict(int)
 
-            for pr in prs:
-                if not pr.merged:
-                    continue
+            # Filter to merged PRs and fetch stats/files in parallel
+            merged_prs = [pr for pr in prs if pr.merged]
+            stats_map = client.get_pr_stats_batch(merged_prs)
+            files_map = client.get_pr_files_batch(merged_prs)
 
+            for pr in merged_prs:
+                stats = stats_map.get((pr.repo, pr.number), {"additions": 0, "deletions": 0})
                 pr_data = {
                     "number": pr.number,
                     "title": pr.title,
                     "repo": pr.repo,
                     "url": pr.url,
-                    "additions": 0,
-                    "deletions": 0,
+                    "additions": stats.get("additions", 0),
+                    "deletions": stats.get("deletions", 0),
                 }
-
-                # Get PR stats for impact calculation
-                try:
-                    stats = client.get_pr_stats(config.github.org, pr.repo, pr.number)
-                    pr_data["additions"] = stats.get("additions", 0)
-                    pr_data["deletions"] = stats.get("deletions", 0)
-                except Exception:
-                    pass
 
                 prs_merged.append(pr_data)
                 by_repo[pr.repo] += 1
 
-                # Get files to determine areas
-                try:
-                    files = client.get_pr_files(config.github.org, pr.repo, pr.number)
-                    for file_info in files:
-                        filename = file_info.get("filename", "")
-                        if filename:
-                            area = infer_area_from_path(filename)
-                            by_area[area] += 1
-                except Exception:
-                    pass
+                # Process files for area distribution
+                files = files_map.get((pr.repo, pr.number), [])
+                for file_info in files:
+                    filename = file_info.get("filename", "")
+                    if filename:
+                        area = infer_area_from_path(filename)
+                        by_area[area] += 1
 
             distribution = {"by_repo": dict(by_repo), "by_area": dict(by_area)}
 

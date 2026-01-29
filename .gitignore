@@ -1,6 +1,9 @@
 # Configuration with secrets
 config.json
 
+# Separate projects
+team-chronicle/
+
 # Goal files (contain personal info)
 goals/*.md
 !goals/TEMPLATE.md

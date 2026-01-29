@@ -69,30 +69,31 @@ COMPETENCY_PATTERNS = {
 
 
 # Level expectations: threshold score expected at each level for each competency
+# v2: Lowered thresholds to match tighter scoring algorithm (cap at 70)
 LEVEL_EXPECTATIONS = {
     "P2": {
+        "Execution & Delivery": 25,
+        "Skills & Knowledge": 20,
+        "Teamwork & Communication": 20,
+        "Influence & Leadership": 10,
+    },
+    "P3": {
         "Execution & Delivery": 35,
         "Skills & Knowledge": 30,
         "Teamwork & Communication": 30,
-        "Influence & Leadership": 15,
-    },
-    "P3": {
-        "Execution & Delivery": 45,
-        "Skills & Knowledge": 40,
-        "Teamwork & Communication": 40,
-        "Influence & Leadership": 25,
+        "Influence & Leadership": 18,
     },
     "P4": {
-        "Execution & Delivery": 55,
-        "Skills & Knowledge": 55,
-        "Teamwork & Communication": 50,
-        "Influence & Leadership": 45,
+        "Execution & Delivery": 42,
+        "Skills & Knowledge": 40,
+        "Teamwork & Communication": 38,
+        "Influence & Leadership": 32,
     },
     "P5": {
-        "Execution & Delivery": 60,
-        "Skills & Knowledge": 65,
-        "Teamwork & Communication": 55,
-        "Influence & Leadership": 60,
+        "Execution & Delivery": 50,
+        "Skills & Knowledge": 50,
+        "Teamwork & Communication": 45,
+        "Influence & Leadership": 45,
     },
 }
 
@@ -148,15 +149,15 @@ def calculate_impact_score(evidence_list: list[dict], prs_merged: list[dict] | N
 def calculate_competency_score(evidence_list: list[dict], impact_multiplier: float = 1.0) -> int:
     """Calculate competency score with diminishing returns and impact weighting.
 
-    Uses a diminishing returns model where repeated evidence of the same type
-    contributes less to the score. Applies soft cap at 85.
+    v2: Tighter scoring with lower point values, more aggressive diminishing returns,
+    and cap at 70 instead of 85. Scores should distribute 15-70.
 
     Args:
         evidence_list: List of evidence dicts with level and signal_type.
         impact_multiplier: Multiplier from calculate_impact_score (0.8-1.2).
 
     Returns:
-        Score in range 0-85 (reserve 85+ for exceptional cases)
+        Score in range 0-70 (reserve 61-70 for truly exceptional cases)
     """
     if not evidence_list:
         return 0
@@ -169,46 +170,49 @@ def calculate_competency_score(evidence_list: list[dict], impact_multiplier: flo
         signal_type = ev.get("signal_type", "unknown")
         evidence_by_type[signal_type].append(ev)
 
-        # Point values with diminishing returns per signal type
+        # More aggressive diminishing returns (0.5 factor)
         type_count = len(evidence_by_type[signal_type])
-        diminishing_factor = 1 / (1 + 0.3 * (type_count - 1))  # 1.0, 0.77, 0.63, 0.53...
+        diminishing_factor = 1 / (1 + 0.5 * (type_count - 1))  # 1.0, 0.67, 0.5, 0.4...
 
-        level_points = {"strong": 20, "moderate": 12, "weak": 5}
-        points = level_points.get(ev.get("level", "weak"), 5)
+        # Lower point values
+        level_points = {"strong": 12, "moderate": 7, "weak": 3}
+        points = level_points.get(ev.get("level", "weak"), 3)
         base_score += points * diminishing_factor
 
-    # Diversity bonus (breadth across signal types)
+    # Smaller diversity bonus
     unique_types = len(evidence_by_type)
-    diversity_bonus = min(unique_types * 3, 15)  # Max 15 points for 5+ types
+    diversity_bonus = min(unique_types * 2, 8)  # Max 8 points for 4+ types
 
     # Combine and apply impact
     raw_score = (base_score + diversity_bonus) * impact_multiplier
 
-    # Soft cap at 85 (sigmoid-like compression above 60)
-    if raw_score > 60:
-        excess = raw_score - 60
-        compressed = 60 + (25 * (1 - math.exp(-excess / 30)))  # Asymptotically approaches 85
-        return min(int(compressed), 85)
+    # Earlier compression (start at 40), lower cap (70)
+    if raw_score > 40:
+        excess = raw_score - 40
+        compressed = 40 + (30 * (1 - math.exp(-excess / 25)))  # Asymptotically approaches 70
+        return min(int(compressed), 70)
 
-    return min(int(raw_score), 85)
+    return min(int(raw_score), 70)
 
 
 def get_score_label(score: int) -> str:
     """Map score to human-readable label.
 
+    v2: Updated thresholds for tighter scoring (cap at 70).
+
     Args:
-        score: Competency score (0-85).
+        score: Competency score (0-70).
 
     Returns:
         Label string: Gap, Developing, Proficient, Strong, or Exceptional
     """
-    if score >= 76:
+    if score >= 61:
         return "Exceptional"
-    elif score >= 61:
+    elif score >= 46:
         return "Strong"
-    elif score >= 41:
+    elif score >= 31:
         return "Proficient"
-    elif score >= 21:
+    elif score >= 16:
         return "Developing"
     else:
         return "Gap"
@@ -216,6 +220,8 @@ def get_score_label(score: int) -> str:
 
 def get_vs_target_label(score: int, competency: str, level: str | None) -> str | None:
     """Determine if score meets level expectations.
+
+    v2: Tighter bands (+/- 10 instead of 15) for more meaningful differentiation.
 
     Args:
         score: Competency score.
@@ -228,13 +234,13 @@ def get_vs_target_label(score: int, competency: str, level: str | None) -> str |
     if not level or level not in LEVEL_EXPECTATIONS:
         return None
 
-    threshold = LEVEL_EXPECTATIONS[level].get(competency, 50)
+    threshold = LEVEL_EXPECTATIONS[level].get(competency, 35)
 
-    if score >= threshold + 15:
+    if score >= threshold + 10:
         return "Exceeding"
     elif score >= threshold:
         return "Meeting"
-    elif score >= threshold - 15:
+    elif score >= threshold - 10:
         return "Developing"
     else:
         return "Gap"
@@ -310,33 +316,47 @@ def analyze_contributions_for_competencies(
             })
 
     # Execution & Delivery: volume of merged work
+    # v2: Higher thresholds - 10 PRs is baseline, not exceptional
     pr_count = len(prs_merged)
-    if pr_count >= 10:
+    if pr_count >= 25:
         results[Competency.EXECUTION_DELIVERY.value]["evidence"].append({
             "signal_type": "volume",
             "level": EvidenceLevel.STRONG.value,
-            "reasoning": f"Merged {pr_count} PRs, demonstrating consistent delivery",
+            "reasoning": f"Merged {pr_count} PRs, demonstrating exceptional delivery",
         })
-    elif pr_count >= 5:
+    elif pr_count >= 12:
         results[Competency.EXECUTION_DELIVERY.value]["evidence"].append({
             "signal_type": "volume",
             "level": EvidenceLevel.MODERATE.value,
             "reasoning": f"Merged {pr_count} PRs, showing solid output",
         })
+    elif pr_count >= 5:
+        results[Competency.EXECUTION_DELIVERY.value]["evidence"].append({
+            "signal_type": "volume",
+            "level": EvidenceLevel.WEAK.value,
+            "reasoning": f"Merged {pr_count} PRs, baseline activity",
+        })
 
     # Teamwork & Communication: review activity
+    # v2: Higher thresholds - 15 reviews is baseline, not exceptional
     review_count = len(reviews_given)
-    if review_count >= 15:
+    if review_count >= 30:
         results[Competency.TEAMWORK_COMMUNICATION.value]["evidence"].append({
             "signal_type": "review_activity",
             "level": EvidenceLevel.STRONG.value,
             "reasoning": f"Provided {review_count} code reviews, actively supporting teammates",
         })
-    elif review_count >= 5:
+    elif review_count >= 12:
         results[Competency.TEAMWORK_COMMUNICATION.value]["evidence"].append({
             "signal_type": "review_activity",
             "level": EvidenceLevel.MODERATE.value,
             "reasoning": f"Provided {review_count} code reviews",
+        })
+    elif review_count >= 5:
+        results[Competency.TEAMWORK_COMMUNICATION.value]["evidence"].append({
+            "signal_type": "review_activity",
+            "level": EvidenceLevel.WEAK.value,
+            "reasoning": f"Provided {review_count} code reviews, some review participation",
         })
 
     # Review turnaround as indicator of responsiveness
@@ -383,14 +403,35 @@ def analyze_contributions_for_competencies(
                 "reasoning": f"Work spans multiple areas: {area_list}",
             })
 
-    # Influence & Leadership: ratio of reviews to PRs (helping others vs own work)
-    if pr_count > 0 and review_count > 0:
+    # Influence & Leadership: review volume (primary signal, more granular tiers)
+    if review_count >= 100:
+        results[Competency.INFLUENCE_LEADERSHIP.value]["evidence"].append({
+            "signal_type": "review_volume",
+            "level": EvidenceLevel.STRONG.value,
+            "reasoning": f"Exceptional review volume ({review_count} reviews), major investment in team development",
+        })
+    elif review_count >= 50:
+        results[Competency.INFLUENCE_LEADERSHIP.value]["evidence"].append({
+            "signal_type": "review_volume",
+            "level": EvidenceLevel.MODERATE.value,
+            "reasoning": f"Strong review volume ({review_count} reviews), solid team contribution",
+        })
+    elif review_count >= 25:
+        results[Competency.INFLUENCE_LEADERSHIP.value]["evidence"].append({
+            "signal_type": "review_volume",
+            "level": EvidenceLevel.WEAK.value,
+            "reasoning": f"Solid review volume ({review_count} reviews), contributing to team",
+        })
+
+    # Influence & Leadership: ratio bonus (secondary signal, small boost)
+    # Uses same signal_type as volume so diminishing returns apply and diversity bonus is equal
+    if pr_count > 0 and review_count >= 25:
         review_ratio = review_count / pr_count
         if review_ratio >= 2.0:
             results[Competency.INFLUENCE_LEADERSHIP.value]["evidence"].append({
-                "signal_type": "mentorship_ratio",
-                "level": EvidenceLevel.MODERATE.value,
-                "reasoning": f"Review-to-PR ratio of {review_ratio:.1f}x suggests significant investment in helping teammates",
+                "signal_type": "review_volume",
+                "level": EvidenceLevel.WEAK.value,
+                "reasoning": f"Review-to-PR ratio of {review_ratio:.1f}x shows proportional investment in teammates",
             })
 
     # Calculate impact multiplier from PR stats
@@ -436,10 +477,10 @@ def get_competency_summary(analysis: dict) -> dict:
         reverse=True,
     )
 
-    # Identify strengths (score >= 50) and gaps (score < 30)
-    # New thresholds: strengths at Proficient+, gaps at Developing or below
-    strengths = [c for c, score, _, _ in sorted_competencies if score >= 50]
-    growth_areas = [c for c, score, _, _ in sorted_competencies if score < 30]
+    # v2: Adjusted thresholds for tighter scoring (cap at 70)
+    # Strengths at 40+ (Strong or Exceptional), gaps below 20 (Gap)
+    strengths = [c for c, score, _, _ in sorted_competencies if score >= 40]
+    growth_areas = [c for c, score, _, _ in sorted_competencies if score < 20]
 
     return {
         "top_competencies": [

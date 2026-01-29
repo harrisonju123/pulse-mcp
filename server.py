@@ -28,12 +28,19 @@ from ic_tracker.tools.github_tools import (
     handle_get_contribution_trends,
     handle_get_github_contributions,
     handle_get_team_members,
+    handle_get_teams,
 )
 from ic_tracker.tools.jira_tools import (
     get_jira_tools,
     handle_get_initiative_roadmap,
     handle_get_team_bandwidth,
     handle_search_jira_issues,
+    handle_update_jira_issue,
+)
+from ic_tracker.tools.pulse_tools import (
+    get_pulse_tools,
+    handle_get_member_pulse,
+    handle_get_pr_details,
 )
 
 logging.basicConfig(
@@ -52,6 +59,7 @@ async def list_tools():
     """List available MCP tools."""
     tools = get_github_tools()
     tools += get_feedback_tools()
+    tools += get_pulse_tools()
     if config and config.confluence:
         tools += get_confluence_tools()
     if config and config.jira:
@@ -78,6 +86,7 @@ async def call_tool(name: str, arguments: dict):
         "get_contribution_distribution",
         "get_competency_analysis",
         "get_peer_feedback",
+        "get_member_pulse",
     )
     if name in tools_requiring_username:
         if not arguments.get("github_username"):
@@ -108,6 +117,24 @@ async def call_tool(name: str, arguments: dict):
             text=json.dumps({"error": "jql is required"})
         )]
 
+    if name == "update_jira_issue" and not arguments.get("issue_key"):
+        return [TextContent(
+            type="text",
+            text=json.dumps({"error": "issue_key is required"})
+        )]
+
+    if name == "get_pr_details":
+        if not arguments.get("repo"):
+            return [TextContent(
+                type="text",
+                text=json.dumps({"error": "repo is required"})
+            )]
+        if not arguments.get("pr_number"):
+            return [TextContent(
+                type="text",
+                text=json.dumps({"error": "pr_number is required"})
+            )]
+
     try:
         if name == "get_github_contributions":
             result = await handle_get_github_contributions(
@@ -117,8 +144,10 @@ async def call_tool(name: str, arguments: dict):
                 start_date=arguments.get("start_date"),
                 end_date=arguments.get("end_date"),
             )
+        elif name == "get_teams":
+            result = await handle_get_teams(config)
         elif name == "get_team_members":
-            result = await handle_get_team_members(config)
+            result = await handle_get_team_members(config, team=arguments.get("team"))
         elif name == "get_confluence_contributions":
             result = await handle_get_confluence_contributions(
                 config,
@@ -143,6 +172,13 @@ async def call_tool(name: str, arguments: dict):
                 config,
                 jql=arguments.get("jql"),
                 max_results=arguments.get("max_results", 50),
+            )
+        elif name == "update_jira_issue":
+            result = await handle_update_jira_issue(
+                config,
+                issue_key=arguments.get("issue_key"),
+                summary=arguments.get("summary"),
+                description=arguments.get("description"),
             )
         elif name == "get_contribution_trends":
             result = await handle_get_contribution_trends(
@@ -173,6 +209,19 @@ async def call_tool(name: str, arguments: dict):
                 config,
                 github_username=arguments.get("github_username"),
                 period=arguments.get("period"),
+            )
+        elif name == "get_member_pulse":
+            result = await handle_get_member_pulse(
+                config,
+                github_username=arguments.get("github_username"),
+                days=arguments.get("days", 14),
+            )
+        elif name == "get_pr_details":
+            result = await handle_get_pr_details(
+                config,
+                repo=arguments.get("repo"),
+                pr_number=arguments.get("pr_number"),
+                include_diff=arguments.get("include_diff", False),
             )
         else:
             result = {"error": f"Unknown tool: {name}"}
@@ -271,13 +320,22 @@ def validate_config() -> int:
             print(f"✗ Jira: connection error - {e}")
             errors.append("Jira connection failed")
 
-    # List team members
-    if len(cfg.team_members) == 0:
+    # List teams and members
+    total_members = len(cfg.team_members)
+    if total_members == 0:
         print("✗ No team members configured")
-        print("  Fix: Add entries to team_members in config.json")
+        print("  Fix: Add entries to 'teams' or 'team_members' in config.json")
         errors.append("No team members configured")
     else:
-        print(f"✓ {len(cfg.team_members)} team member(s) configured")
+        team_count = len(cfg.teams)
+        if team_count == 1 and "default" in cfg.teams:
+            # Legacy single-team format
+            print(f"✓ {total_members} team member(s) configured")
+        else:
+            # Multi-team format
+            print(f"✓ {team_count} team(s) with {total_members} total member(s) configured:")
+            for team_id, team in cfg.teams.items():
+                print(f"    - {team.name} ({team_id}): {len(team.members)} member(s)")
 
     # Summary
     print()

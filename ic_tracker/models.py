@@ -20,8 +20,15 @@ class TeamMember:
 
 
 @dataclass
+class Team:
+    id: str
+    name: str
+    members: dict[str, "TeamMember"]
+
+
+@dataclass
 class ConfluenceConfig:
-    base_url: str  # e.g. https://justworks.atlassian.net/wiki
+    base_url: str  # e.g. https://yourcompany.atlassian.net/wiki
     email: str
     api_token: str
     space_keys: list[str]  # e.g. ["ENGG"]
@@ -29,7 +36,7 @@ class ConfluenceConfig:
 
 @dataclass
 class JiraConfig:
-    base_url: str  # e.g. https://justworks.atlassian.net
+    base_url: str  # e.g. https://yourcompany.atlassian.net
     email: str
     api_token: str
     project_keys: list[str]  # e.g. ["PROJ", "INFRA"]
@@ -40,9 +47,17 @@ class JiraConfig:
 @dataclass
 class Config:
     github: GitHubConfig
-    team_members: dict[str, TeamMember]
+    teams: dict[str, Team]
     confluence: Optional[ConfluenceConfig] = None
     jira: Optional[JiraConfig] = None
+
+    @property
+    def team_members(self) -> dict[str, TeamMember]:
+        """Flatten all teams into a single dict of members for backward compatibility."""
+        members = {}
+        for team in self.teams.values():
+            members.update(team.members)
+        return members
 
 
 @dataclass

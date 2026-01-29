@@ -23,11 +23,41 @@
     "epic_link_field": "customfield_10014"
   },
   "_jira_note": "story_point_field and epic_link_field vary by Jira instance - check your Jira admin settings",
-  "team_members": {
+
+  "_teams_note": "Use 'teams' for multi-team setup OR 'team_members' for single team (legacy format). Cannot use both.",
+
+  "teams": {
+    "platform": {
+      "name": "Platform Team",
+      "members": {
+        "alice-github": {
+          "atlassian_account_id": "712020:abc123-def456-...",
+          "name": "Alice Smith"
+        },
+        "bob-github": {
+          "atlassian_account_id": "712020:xyz789-uvw012-...",
+          "name": "Bob Jones"
+        }
+      }
+    },
+    "product": {
+      "name": "Product Team",
+      "members": {
+        "carol-github": {
+          "atlassian_account_id": "712020:hij345-klm678-...",
+          "name": "Carol Williams"
+        }
+      }
+    }
+  },
+
+  "_legacy_format_note": "Alternative: use 'team_members' for single team (comment out 'teams' above)",
+  "_team_members_example": {
     "github-username": {
       "atlassian_account_id": "712020:abc123-def456-...",
       "name": "Jane Smith"
     }
   },
+
   "_atlassian_note": "Use 'N/A' for atlassian_account_id if not using Confluence/Jira"
 }

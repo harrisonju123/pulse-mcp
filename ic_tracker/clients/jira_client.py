@@ -64,6 +64,187 @@ class JiraClient:
         })
         return self._parse_issue(data)
 
+    def update_issue(
+        self,
+        issue_key: str,
+        summary: str | None = None,
+        description: str | None = None,
+    ) -> None:
+        """Update an issue's fields.
+
+        Args:
+            issue_key: The Jira issue key (e.g., 'PROJ-123')
+            summary: New summary/title (optional)
+            description: New description in plain text (optional, converted to ADF)
+        """
+        _validate_issue_key(issue_key)
+
+        fields: dict[str, Any] = {}
+
+        if summary is not None:
+            fields["summary"] = summary
+
+        if description is not None:
+            # Convert plain text to Atlassian Document Format (ADF)
+            fields["description"] = self._text_to_adf(description)
+
+        if not fields:
+            raise ValueError("At least one field (summary or description) must be provided")
+
+        self._request("PUT", f"/rest/api/3/issue/{issue_key}", json_data={"fields": fields})
+
+    def _text_to_adf(self, text: str) -> dict[str, Any]:
+        """Convert plain text to Atlassian Document Format (ADF).
+
+        Handles basic markdown-like formatting:
+        - Lines starting with ## become headings
+        - Lines starting with - become bullet lists
+        - Lines starting with [ ] or [x] become task lists
+        - Code blocks with ``` are preserved
+        - Empty lines create paragraph breaks
+        """
+        import uuid
+
+        content: list[dict[str, Any]] = []
+        lines = text.split("\n")
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+
+            # Code block
+            if line.startswith("```"):
+                code_lines = []
+                language = line[3:].strip() or None
+                i += 1
+                while i < len(lines) and not lines[i].startswith("```"):
+                    code_lines.append(lines[i])
+                    i += 1
+                code_block: dict[str, Any] = {"type": "codeBlock"}
+                if language:
+                    code_block["attrs"] = {"language": language}
+                if code_lines:
+                    code_block["content"] = [{"type": "text", "text": "\n".join(code_lines)}]
+                content.append(code_block)
+                i += 1
+                continue
+
+            # Heading (## or ###)
+            if line.startswith("## "):
+                content.append({
+                    "type": "heading",
+                    "attrs": {"level": 2},
+                    "content": [{"type": "text", "text": line[3:].strip()}],
+                })
+                i += 1
+                continue
+            if line.startswith("### "):
+                content.append({
+                    "type": "heading",
+                    "attrs": {"level": 3},
+                    "content": [{"type": "text", "text": line[4:].strip()}],
+                })
+                i += 1
+                continue
+
+            # Bullet list - collect consecutive bullet items
+            if line.startswith("- "):
+                list_items = []
+                while i < len(lines) and lines[i].startswith("- "):
+                    item_text = lines[i][2:].strip()
+                    # Strip checkbox markers and treat as regular bullets
+                    if item_text.startswith("[ ] "):
+                        item_text = item_text[4:]
+                    elif item_text.startswith("[x] ") or item_text.startswith("[X] "):
+                        item_text = item_text[4:]
+                    list_items.append({
+                        "type": "listItem",
+                        "content": [{
+                            "type": "paragraph",
+                            "content": [{"type": "text", "text": item_text}],
+                        }],
+                    })
+                    i += 1
+
+                content.append({
+                    "type": "bulletList",
+                    "content": list_items,
+                })
+                continue
+
+            # Empty line - skip
+            if not line.strip():
+                i += 1
+                continue
+
+            # Regular paragraph - collect consecutive non-special lines
+            para_lines = []
+            while i < len(lines):
+                current = lines[i]
+                if (current.startswith("```") or current.startswith("## ") or
+                    current.startswith("### ") or current.startswith("- ") or
+                    not current.strip()):
+                    break
+                para_lines.append(current)
+                i += 1
+
+            if para_lines:
+                # Join with spaces, handle inline formatting
+                para_text = " ".join(para_lines)
+                content.append({
+                    "type": "paragraph",
+                    "content": self._parse_inline_formatting(para_text),
+                })
+
+        return {
+            "type": "doc",
+            "version": 1,
+            "content": content if content else [{"type": "paragraph", "content": []}],
+        }
+
+    def _parse_inline_formatting(self, text: str) -> list[dict[str, Any]]:
+        """Parse inline formatting like **bold** and `code`."""
+        result: list[dict[str, Any]] = []
+        current_pos = 0
+
+        import re
+        # Pattern for **bold**, `code`, and plain text
+        pattern = re.compile(r'(\*\*(.+?)\*\*|`([^`]+)`)')
+
+        for match in pattern.finditer(text):
+            # Add plain text before match
+            if match.start() > current_pos:
+                plain = text[current_pos:match.start()]
+                if plain:
+                    result.append({"type": "text", "text": plain})
+
+            if match.group(2):  # Bold
+                result.append({
+                    "type": "text",
+                    "text": match.group(2),
+                    "marks": [{"type": "strong"}],
+                })
+            elif match.group(3):  # Code
+                result.append({
+                    "type": "text",
+                    "text": match.group(3),
+                    "marks": [{"type": "code"}],
+                })
+
+            current_pos = match.end()
+
+        # Add remaining plain text
+        if current_pos < len(text):
+            remaining = text[current_pos:]
+            if remaining:
+                result.append({"type": "text", "text": remaining})
+
+        # If no formatting found, return simple text
+        if not result and text:
+            result.append({"type": "text", "text": text})
+
+        return result
+
     def search_issues(self, jql: str, max_results: int | None = None) -> list[JiraIssue]:
         """Search issues using JQL."""
         issues = []
@@ -199,6 +380,10 @@ class JiraClient:
                         f"{response.status_code} Error for {url}: {error_body}",
                         response=response,
                     )
+
+                # Handle 204 No Content (common for PUT/DELETE operations)
+                if response.status_code == 204 or not response.content:
+                    return {}
 
                 try:
                     return response.json()

@@ -359,3 +359,111 @@ class TestJiraClientAPI:
         client = JiraClient(jira_config)
         issue = client._parse_issue(sample_jira_issue)
         assert issue.epic_link == "PROJ-100"
+
+    @responses.activate
+    def test_update_issue_description(self, jira_config):
+        """Test updating an issue's description."""
+        responses.add(
+            responses.PUT,
+            "https://test.atlassian.net/rest/api/3/issue/PROJ-123",
+            status=204,
+        )
+
+        with JiraClient(jira_config) as client:
+            client.update_issue("PROJ-123", description="New description")
+
+        assert len(responses.calls) == 1
+        request_body = responses.calls[0].request.body
+        import json
+        body = json.loads(request_body)
+        assert "description" in body["fields"]
+        assert body["fields"]["description"]["type"] == "doc"
+
+    @responses.activate
+    def test_update_issue_summary(self, jira_config):
+        """Test updating an issue's summary."""
+        responses.add(
+            responses.PUT,
+            "https://test.atlassian.net/rest/api/3/issue/PROJ-123",
+            status=204,
+        )
+
+        with JiraClient(jira_config) as client:
+            client.update_issue("PROJ-123", summary="New title")
+
+        assert len(responses.calls) == 1
+        import json
+        body = json.loads(responses.calls[0].request.body)
+        assert body["fields"]["summary"] == "New title"
+
+    def test_update_issue_validates_key(self, jira_config):
+        """Test that update_issue validates the issue key."""
+        with JiraClient(jira_config) as client:
+            with pytest.raises(ValueError, match="Invalid Jira issue key"):
+                client.update_issue('PROJ-1" OR 1=1', description="test")
+
+    def test_update_issue_requires_field(self, jira_config):
+        """Test that update_issue requires at least one field."""
+        with JiraClient(jira_config) as client:
+            with pytest.raises(ValueError, match="At least one field"):
+                client.update_issue("PROJ-123")
+
+
+class TestADFConversion:
+    """Test Atlassian Document Format conversion."""
+
+    def test_simple_paragraph(self, jira_config):
+        client = JiraClient(jira_config)
+        result = client._text_to_adf("Simple text")
+        assert result["type"] == "doc"
+        assert result["version"] == 1
+        assert len(result["content"]) == 1
+        assert result["content"][0]["type"] == "paragraph"
+        assert result["content"][0]["content"][0]["text"] == "Simple text"
+
+    def test_heading_conversion(self, jira_config):
+        client = JiraClient(jira_config)
+        result = client._text_to_adf("## Heading 2\n### Heading 3")
+        assert result["content"][0]["type"] == "heading"
+        assert result["content"][0]["attrs"]["level"] == 2
+        assert result["content"][1]["type"] == "heading"
+        assert result["content"][1]["attrs"]["level"] == 3
+
+    def test_bullet_list_conversion(self, jira_config):
+        client = JiraClient(jira_config)
+        result = client._text_to_adf("- Item 1\n- Item 2")
+        assert result["content"][0]["type"] == "bulletList"
+        assert len(result["content"][0]["content"]) == 2
+
+    def test_checkbox_conversion(self, jira_config):
+        """Checkboxes are converted to regular bullet items (task lists unsupported)."""
+        client = JiraClient(jira_config)
+        result = client._text_to_adf("- [ ] Todo item\n- [x] Done item")
+        assert result["content"][0]["type"] == "bulletList"
+        assert len(result["content"][0]["content"]) == 2
+        # Checkbox markers are stripped, text is preserved
+        assert result["content"][0]["content"][0]["content"][0]["content"][0]["text"] == "Todo item"
+        assert result["content"][0]["content"][1]["content"][0]["content"][0]["text"] == "Done item"
+
+    def test_code_block_conversion(self, jira_config):
+        client = JiraClient(jira_config)
+        result = client._text_to_adf("```javascript\nconst x = 1;\n```")
+        assert result["content"][0]["type"] == "codeBlock"
+        assert result["content"][0]["attrs"]["language"] == "javascript"
+        assert result["content"][0]["content"][0]["text"] == "const x = 1;"
+
+    def test_inline_bold(self, jira_config):
+        client = JiraClient(jira_config)
+        result = client._parse_inline_formatting("This is **bold** text")
+        assert len(result) == 3
+        assert result[0]["text"] == "This is "
+        assert result[1]["text"] == "bold"
+        assert result[1]["marks"][0]["type"] == "strong"
+        assert result[2]["text"] == " text"
+
+    def test_inline_code(self, jira_config):
+        client = JiraClient(jira_config)
+        result = client._parse_inline_formatting("Use `code` here")
+        assert len(result) == 3
+        assert result[1]["text"] == "code"
+        assert result[1]["marks"][0]["type"] == "code"

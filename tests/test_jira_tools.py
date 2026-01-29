@@ -11,7 +11,7 @@ from ic_tracker.tools.jira_tools import (
     _calculate_allocation,
     _issue_to_dict,
 )
-from ic_tracker.models import JiraIssue, Config
+from ic_tracker.models import JiraIssue, Config, Team
 from datetime import datetime, timezone
 
 
@@ -310,7 +310,7 @@ class TestToolHandlers:
     async def test_handle_get_initiative_roadmap_no_jira_config(self, team_members):
         config = Config(
             github=None,
-            team_members=team_members,
+            teams={"default": Team(id="default", name="Default Team", members=team_members)},
             jira=None,  # No Jira configured
         )
 
@@ -437,7 +437,7 @@ class TestToolHandlers:
     async def test_handle_search_jira_issues_no_jira_config(self, team_members):
         config = Config(
             github=None,
-            team_members=team_members,
+            teams={"default": Team(id="default", name="Default Team", members=team_members)},
             jira=None,
         )
 

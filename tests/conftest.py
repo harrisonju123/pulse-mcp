@@ -2,7 +2,7 @@
 
 import pytest
 
-from ic_tracker.models import Config, GitHubConfig, JiraConfig, TeamMember
+from ic_tracker.models import Config, GitHubConfig, JiraConfig, Team, TeamMember
 
 
 @pytest.fixture
@@ -19,6 +19,7 @@ def jira_config():
 
 @pytest.fixture
 def team_members():
+    """Legacy team_members fixture for backward compatibility in tests."""
     return {
         "testuser": TeamMember(
             github_username="testuser",
@@ -34,10 +35,22 @@ def team_members():
 
 
 @pytest.fixture
-def config(jira_config, team_members):
+def teams(team_members):
+    """Teams fixture using the new multi-team format."""
+    return {
+        "default": Team(
+            id="default",
+            name="Default Team",
+            members=team_members,
+        )
+    }
+
+
+@pytest.fixture
+def config(jira_config, teams):
     return Config(
         github=GitHubConfig(token="gh-token", org="testorg", repos=["repo1"]),
-        team_members=team_members,
+        teams=teams,
         jira=jira_config,
     )
 

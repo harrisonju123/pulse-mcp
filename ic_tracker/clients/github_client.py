@@ -3,7 +3,9 @@
 import json
 import logging
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any, Iterator
 
@@ -17,12 +19,80 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 RETRY_DELAY = 1.0
 PAGE_SIZE = 100
+DEFAULT_CACHE_TTL = 300  # 5 minutes
+CACHE_CLEANUP_INTERVAL = 100  # Cleanup every N writes
+
+
+class TTLCache:
+    """Thread-safe in-memory cache with TTL expiration."""
+
+    def __init__(self, ttl_seconds: int = DEFAULT_CACHE_TTL):
+        self._cache: dict[str, tuple[float, Any]] = {}
+        self._ttl = ttl_seconds
+        self._lock = threading.Lock()
+        self._write_count = 0
+        # Metrics for observability
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: str) -> Any | None:
+        """Get value from cache if not expired (thread-safe)."""
+        with self._lock:
+            if key in self._cache:
+                timestamp, value = self._cache[key]
+                if time.time() - timestamp < self._ttl:
+                    self.hits += 1
+                    return value
+                del self._cache[key]
+            self.misses += 1
+            return None
+
+    def set(self, key: str, value: Any) -> None:
+        """Store value in cache with current timestamp (thread-safe)."""
+        with self._lock:
+            self._cache[key] = (time.time(), value)
+            self._write_count += 1
+            # Periodic cleanup to prevent unbounded growth
+            if self._write_count >= CACHE_CLEANUP_INTERVAL:
+                self._cleanup_expired_unlocked()
+                self._write_count = 0
+
+    def _cleanup_expired_unlocked(self) -> None:
+        """Remove expired entries. Must be called with lock held."""
+        now = time.time()
+        expired = [k for k, (ts, _) in self._cache.items() if now - ts >= self._ttl]
+        for k in expired:
+            del self._cache[k]
+
+    def clear(self) -> None:
+        """Clear all cached entries (thread-safe)."""
+        with self._lock:
+            self._cache.clear()
+            self.hits = 0
+            self.misses = 0
+
+    def invalidate_prefix(self, prefix: str) -> None:
+        """Invalidate all keys starting with prefix (thread-safe)."""
+        with self._lock:
+            keys_to_delete = [k for k in self._cache if k.startswith(prefix)]
+            for key in keys_to_delete:
+                del self._cache[key]
+
+    def get_stats(self) -> dict[str, int]:
+        """Get cache statistics."""
+        with self._lock:
+            return {
+                "size": len(self._cache),
+                "hits": self.hits,
+                "misses": self.misses,
+                "hit_rate": round(self.hits / (self.hits + self.misses) * 100, 1) if (self.hits + self.misses) > 0 else 0,
+            }
 
 
 class GitHubClient:
     """Client for GitHub REST API."""
 
-    def __init__(self, config: GitHubConfig):
+    def __init__(self, config: GitHubConfig, cache_ttl: int = DEFAULT_CACHE_TTL):
         self.config = config
         self.session = requests.Session()
         self.session.headers.update({
@@ -30,10 +100,15 @@ class GitHubClient:
             "Authorization": f"Bearer {config.token}",
             "X-GitHub-Api-Version": "2022-11-28",
         })
+        self._cache = TTLCache(ttl_seconds=cache_ttl)
+        self._executor = ThreadPoolExecutor(max_workers=10)
+        self._session_lock = threading.Lock()
 
     def close(self):
         """Close the session and release resources."""
+        self._executor.shutdown(wait=True)  # Wait for in-flight work to complete
         self.session.close()
+        self._cache.clear()
 
     def __enter__(self):
         return self
@@ -169,13 +244,36 @@ class GitHubClient:
         path: str,
         params: dict | None = None,
         headers: dict | None = None,
+        use_cache: bool = True,
     ) -> dict[str, Any]:
-        """Make an API request with retry logic."""
+        """Make an API request with retry logic and caching.
+
+        Args:
+            method: HTTP method.
+            path: API path.
+            params: Query parameters.
+            headers: Additional headers.
+            use_cache: Whether to use cache for GET requests (default True).
+
+        Returns:
+            Response data as dict.
+        """
         url = f"https://api.github.com{path}"
+
+        # Check cache for GET requests
+        cache_key = None
+        if method == "GET" and use_cache:
+            cache_key = f"{path}:{json.dumps(params, sort_keys=True) if params else ''}"
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                logger.debug(f"Cache hit for {path}")
+                return cached
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.session.request(method, url, params=params, headers=headers, timeout=30)
+                # Use lock for thread-safe session access
+                with self._session_lock:
+                    response = self.session.request(method, url, params=params, headers=headers, timeout=30)
 
                 if response.status_code == 403:
                     remaining = response.headers.get("X-RateLimit-Remaining", "0")
@@ -206,7 +304,11 @@ class GitHubClient:
                     )
 
                 try:
-                    return response.json()
+                    data = response.json()
+                    # Cache successful GET responses
+                    if cache_key is not None:
+                        self._cache.set(cache_key, data)
+                    return data
                 except json.JSONDecodeError as e:
                     raise requests.exceptions.RequestException(
                         f"Invalid JSON response from {url}: {response.text[:200]}"
@@ -370,3 +472,231 @@ class GitHubClient:
             page += 1
 
         return reviews
+
+    # Batch methods for parallel fetching
+
+    def get_pr_stats_batch(
+        self,
+        prs: list[PullRequest],
+    ) -> dict[tuple[str, int], dict[str, int]]:
+        """Fetch stats for multiple PRs in parallel.
+
+        Args:
+            prs: List of PullRequest objects to fetch stats for.
+
+        Returns:
+            Dict mapping (repo, pr_number) to stats dict with 'additions' and 'deletions'.
+        """
+        if not prs:
+            return {}
+
+        def fetch_stats(pr: PullRequest) -> tuple[tuple[str, int], dict[str, int] | None]:
+            try:
+                stats = self.get_pr_stats(self.config.org, pr.repo, pr.number)
+                return ((pr.repo, pr.number), stats)
+            except Exception as e:
+                logger.warning(f"Failed to get stats for PR {pr.repo}#{pr.number}: {e}")
+                return ((pr.repo, pr.number), None)
+
+        results = {}
+        futures = [self._executor.submit(fetch_stats, pr) for pr in prs]
+
+        for future in as_completed(futures):
+            try:
+                key, stats = future.result(timeout=60)
+                if stats is not None:
+                    results[key] = stats
+            except Exception as e:
+                logger.warning(f"Batch stats fetch failed: {e}")
+
+        return results
+
+    def get_pr_files_batch(
+        self,
+        prs: list[PullRequest],
+    ) -> dict[tuple[str, int], list[dict[str, Any]]]:
+        """Fetch files for multiple PRs in parallel.
+
+        Args:
+            prs: List of PullRequest objects to fetch files for.
+
+        Returns:
+            Dict mapping (repo, pr_number) to list of file dicts.
+        """
+        if not prs:
+            return {}
+
+        def fetch_files(pr: PullRequest) -> tuple[tuple[str, int], list[dict[str, Any]] | None]:
+            try:
+                files = self.get_pr_files(self.config.org, pr.repo, pr.number)
+                return ((pr.repo, pr.number), files)
+            except Exception as e:
+                logger.warning(f"Failed to get files for PR {pr.repo}#{pr.number}: {e}")
+                return ((pr.repo, pr.number), None)
+
+        results = {}
+        futures = [self._executor.submit(fetch_files, pr) for pr in prs]
+
+        for future in as_completed(futures):
+            try:
+                key, files = future.result(timeout=60)
+                if files is not None:
+                    results[key] = files
+            except Exception as e:
+                logger.warning(f"Batch files fetch failed: {e}")
+
+        return results
+
+    def get_turnaround_data_batch(
+        self,
+        reviews: list[CodeReview],
+    ) -> dict[tuple[str, int], dict[str, Any]]:
+        """Fetch timeline and review data for multiple reviews in parallel.
+
+        Args:
+            reviews: List of CodeReview objects.
+
+        Returns:
+            Dict mapping (repo, pr_number) to dict with 'timeline' and 'reviews' keys.
+        """
+        if not reviews:
+            return {}
+
+        def fetch_turnaround_data(review: CodeReview) -> tuple[tuple[str, int], dict[str, Any] | None]:
+            try:
+                timeline = self.get_pr_timeline(self.config.org, review.repo, review.pr_number)
+                pr_reviews = self.get_reviews_for_pr(self.config.org, review.repo, review.pr_number)
+                return ((review.repo, review.pr_number), {"timeline": timeline, "reviews": pr_reviews})
+            except Exception as e:
+                logger.warning(f"Failed to get turnaround data for PR {review.repo}#{review.pr_number}: {e}")
+                return ((review.repo, review.pr_number), None)
+
+        results = {}
+        futures = [self._executor.submit(fetch_turnaround_data, review) for review in reviews]
+
+        for future in as_completed(futures):
+            try:
+                key, data = future.result(timeout=60)
+                if data is not None:
+                    results[key] = data
+            except Exception as e:
+                logger.warning(f"Batch turnaround data fetch failed: {e}")
+
+        return results
+
+    def get_pr_diff(self, owner: str, repo: str, number: int) -> str:
+        """Get the diff content for a PR.
+
+        Args:
+            owner: Repository owner.
+            repo: Repository name.
+            number: PR number.
+
+        Returns:
+            Diff content as a string.
+        """
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}"
+        headers = {"Accept": "application/vnd.github.v3.diff"}
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                with self._session_lock:
+                    response = self.session.get(url, headers=headers, timeout=30)
+
+                if response.status_code == 403:
+                    remaining = response.headers.get("X-RateLimit-Remaining", "0")
+                    if remaining == "0":
+                        import time
+                        reset_time = int(response.headers.get("X-RateLimit-Reset", 0))
+                        wait_time = max(reset_time - time.time(), 1)
+                        logger.warning(f"Rate limited, waiting {wait_time:.0f}s")
+                        time.sleep(min(wait_time, 60))
+                        continue
+
+                if response.status_code >= 500:
+                    if attempt < MAX_RETRIES - 1:
+                        delay = RETRY_DELAY * (2 ** attempt)
+                        logger.warning(f"Server error {response.status_code}, retrying in {delay}s")
+                        time.sleep(delay)
+                        continue
+
+                if response.status_code >= 400:
+                    raise requests.exceptions.HTTPError(
+                        f"{response.status_code} Error fetching diff for {repo}#{number}",
+                        response=response,
+                    )
+
+                return response.text
+
+            except requests.exceptions.RequestException as e:
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_DELAY * (2 ** attempt)
+                    logger.warning(f"Request failed: {e}, retrying in {delay}s")
+                    time.sleep(delay)
+                    continue
+                raise
+
+        raise requests.exceptions.RequestException(f"Failed to fetch diff after {MAX_RETRIES} retries")
+
+    def search_open_prs(self, username: str) -> list[PullRequest]:
+        """Search for open PRs authored by a user.
+
+        Args:
+            username: GitHub username.
+
+        Returns:
+            List of PullRequest objects for open PRs.
+        """
+        query = f"type:pr is:open author:{username} org:{self.config.org}"
+
+        prs = []
+        for item in self._paginate_search("issues", query):
+            pr = self._parse_pr_from_search(item)
+            prs.append(pr)
+
+        return prs
+
+    def get_reviewers_for_pr_batch(
+        self,
+        prs: list[PullRequest],
+    ) -> dict[tuple[str, int], list[str]]:
+        """Fetch reviewers for multiple PRs in parallel.
+
+        Args:
+            prs: List of PullRequest objects.
+
+        Returns:
+            Dict mapping (repo, pr_number) to list of reviewer usernames.
+        """
+        if not prs:
+            return {}
+
+        def fetch_reviewers(pr: PullRequest) -> tuple[tuple[str, int], list[str] | None]:
+            try:
+                reviews = self.get_reviews_for_pr(self.config.org, pr.repo, pr.number)
+                # Dedupe reviewers, preserving order
+                seen = set()
+                reviewers = []
+                for review in reviews:
+                    user = review.get("user", {})
+                    login = user.get("login", "")
+                    if login and login not in seen:
+                        seen.add(login)
+                        reviewers.append(login)
+                return ((pr.repo, pr.number), reviewers)
+            except Exception as e:
+                logger.warning(f"Failed to get reviewers for PR {pr.repo}#{pr.number}: {e}")
+                return ((pr.repo, pr.number), None)
+
+        results = {}
+        futures = [self._executor.submit(fetch_reviewers, pr) for pr in prs]
+
+        for future in as_completed(futures):
+            try:
+                key, reviewers = future.result(timeout=60)
+                if reviewers is not None:
+                    results[key] = reviewers
+            except Exception as e:
+                logger.warning(f"Batch reviewers fetch failed: {e}")
+
+        return results

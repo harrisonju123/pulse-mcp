@@ -76,6 +76,33 @@ def get_jira_tools() -> list[Tool]:
                 "required": ["jql"],
             },
         ),
+        Tool(
+            name="update_jira_issue",
+            description=(
+                "Update a Jira issue's summary (title) and/or description. "
+                "Supports basic markdown formatting in description: headings (##), "
+                "bullet lists (-), checkboxes (- [ ]), code blocks (```), "
+                "bold (**text**), and inline code (`code`)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "issue_key": {
+                        "type": "string",
+                        "description": "Jira issue key (e.g., 'PROJ-123')",
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "New summary/title for the issue (optional)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New description for the issue in markdown format (optional)",
+                    },
+                },
+                "required": ["issue_key"],
+            },
+        ),
     ]
 
 
@@ -249,6 +276,45 @@ async def handle_search_jira_issues(
         "total_results": len(issues),
         "issues": [_issue_to_dict(i) for i in issues],
     }
+
+
+async def handle_update_jira_issue(
+    config: Config,
+    issue_key: str,
+    summary: str | None = None,
+    description: str | None = None,
+) -> dict:
+    """Update a Jira issue's summary and/or description."""
+    if config.jira is None:
+        return {"error": "Jira is not configured. Add a 'jira' section to your config file."}
+
+    if summary is None and description is None:
+        return {"error": "At least one of 'summary' or 'description' must be provided"}
+
+    with JiraClient(config.jira) as client:
+        try:
+            client.update_issue(issue_key, summary=summary, description=description)
+        except ValueError as e:
+            return {"error": str(e)}
+        except Exception as e:
+            logger.error(f"Failed to update issue {issue_key}: {e}")
+            return {"error": f"Failed to update issue: {e}"}
+
+    # Fetch the updated issue to return current state
+    try:
+        updated_issue = client.get_issue(issue_key)
+        return {
+            "success": True,
+            "message": f"Successfully updated {issue_key}",
+            "issue": _issue_to_dict(updated_issue),
+        }
+    except Exception:
+        # Update succeeded but fetch failed - still report success
+        return {
+            "success": True,
+            "message": f"Successfully updated {issue_key}",
+            "issue_key": issue_key,
+        }
 
 
 def _calculate_epic_progress(epic: JiraIssue, children: list[JiraIssue]) -> dict:

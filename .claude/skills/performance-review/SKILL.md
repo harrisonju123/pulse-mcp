@@ -79,13 +79,19 @@ The skill supports several named date range formats. Parse these from the user's
 For each goal, calculate an alignment score (0-100) using these components:
 
 ### Evidence Count (0-40 points)
-| PRs/Docs Supporting Goal | Points |
-|--------------------------|--------|
-| 0 | 0 |
-| 1-2 | 10 |
-| 3-5 | 20 |
-| 6-10 | 30 |
-| 11+ | 40 |
+Volume alone does not indicate exceptional performance. Score based on **quality and ownership**, not just count.
+
+| PRs/Docs Supporting Goal | Points | Notes |
+|--------------------------|--------|-------|
+| 0 | 0 | No evidence |
+| 1-2 | 10 | Minimal engagement |
+| 3-5 | 15 | Some evidence |
+| 6-10 | 20 | Consistent execution |
+| 11+ with execution only | 25 | High volume, but assigned work only |
+| 6+ with ownership evidence | 35 | Drove decisions, scoped work, identified gaps |
+| 11+ with ownership evidence | 40 | Led initiative with high output |
+
+**Ownership evidence includes:** Scoping work independently, identifying gaps before being asked, driving technical decisions, leading cross-team coordination, mentoring others on the work.
 
 ### Keyword Relevance (0-30 points)
 Match PR titles and documentation against goal keywords:
@@ -107,10 +113,69 @@ For quantitative key results (KRs):
 ### Score Interpretation
 | Total Score | Status |
 |-------------|--------|
-| 0-30 | Needs Attention |
-| 31-60 | In Progress |
-| 61-85 | On Track |
-| 86-100 | Exceeded |
+| 0-25 | Needs Attention |
+| 26-50 | In Progress |
+| 51-70 | On Track |
+| 71-85 | Strong |
+| 86-100 | Exceeded (rare) |
+
+**Note:** "On Track" represents solid, reliable work meeting expectations. "Exceeded" is rare and requires demonstrated ownership, initiative, and impact beyond assigned work.
+
+## Calibration Philosophy
+
+Scoring should be conservative and defensible. Default to "Meets Expectations" for solid work.
+
+### Core Principles
+- **"Meets Expectations" is the baseline for solid performers.** Reliably completing assigned work well is expected, not exceptional.
+- **"Exceeds" requires demonstrated ownership, initiative, and impact beyond assigned work.** This is rare and should be reserved for clear evidence of going above and beyond.
+- **Executing tickets well ≠ exceeding expectations.** Completing assigned Jira tickets, even many of them, demonstrates execution—not ownership.
+- **Avoid score inflation.** Do not give high scores simply because there were many PRs or the work was technically complex.
+- **Avoid upward trajectory language unless strongly warranted.** Phrases like "trending toward Exceeds" or "on track for promotion" require exceptional evidence.
+
+### Ownership vs Execution
+
+| Type | Definition | Scoring Impact |
+|------|------------|----------------|
+| **Execution** | Completing assigned work reliably and with quality | Baseline expectation (On Track) |
+| **Ownership** | Scoping work independently, identifying gaps, driving technical decisions, leading workstreams, mentoring | Required for Strong/Exceeded scores |
+
+High scores require ownership evidence, not just execution volume. Examples of ownership:
+- Identified and scoped a technical initiative before being asked
+- Drove architectural decisions with clear rationale
+- Led cross-team coordination to unblock work
+- Mentored teammates and elevated team capabilities
+- Proactively addressed tech debt or operational concerns
+
+### Tenure Modifier
+
+Adjust expectations based on time in role:
+
+| Tenure | Expectation Adjustment |
+|--------|------------------------|
+| < 6 months | **Cap scores at 60** unless exceptional initiative demonstrated. Acknowledge good ramp-up without inflating scores. At this stage, learning and ramping is expected. |
+| 6-12 months | Normal scoring applies. Should be contributing consistently. |
+| 12+ months | Higher expectations for ownership and initiative. Execution alone is insufficient for high scores. |
+
+**For newer employees:** Acknowledge positive ramp-up trajectory without framing it as "exceeding." Completing onboarding and learning systems well is the expectation for new hires.
+
+## Competency Score Reinterpretation
+
+The `mcp__ic-tracker__get_competency_analysis` tool returns scores that tend toward inflation. Reinterpret them conservatively:
+
+| Tool Score | Skill Interpretation | Meaning |
+|------------|---------------------|---------|
+| 0-20 | Gap | Clear development need |
+| 21-40 | Developing | Building capability, not yet consistent |
+| 41-55 | Solid | Meeting expectations for level |
+| 56-70 | Strong | Consistent, reliable performance |
+| 71-85 | Very Strong | Above expectations with ownership evidence |
+| 86-100 | Exceptional (rare) | Truly outstanding, requires clear evidence |
+
+**Calibration guidance:**
+- Volume of PRs alone does not indicate exceptional performance
+- Look for evidence of ownership, mentorship, cross-team impact for higher interpretations
+- Tenure matters: < 6 months caps at "Solid" unless clear initiative shown
+- Tool's "Exceptional" (78+) should often be reinterpreted as "Strong" or "Solid" based on actual evidence
 
 ### Gap Analysis
 For each goal, document:
@@ -124,6 +189,7 @@ For each goal, document:
 # Performance Review: [Name]
 **Review Period:** [Start Date] - [End Date] ([Named Range if applicable])
 **Role:** [Title from goals]
+**Tenure:** [X months in role]
 
 ## Summary
 [2-3 sentence overview]
@@ -131,11 +197,12 @@ For each goal, document:
 ## Goal Progress
 
 ### [Goal #1: Title]
-**Alignment Score:** [X]/100 ([Status])
+**Alignment Score:** [X]/100 ([Needs Attention/In Progress/On Track/Strong/Exceeded])
 
 **Evidence:**
 - [Specific PR demonstrating progress]
 - [Quantitative metrics]
+- **Ownership indicators:** [If any: scoped work, drove decisions, identified gaps | If none: Execution only]
 
 **Key Result Progress:**
 - [KR1]: [Achieved] / [Target] ([%])
@@ -168,8 +235,10 @@ For each goal, document:
 
 ## Competency Analysis
 
-### [Competency Name] (Score: X/100)
+### [Competency Name]
+**Tool Score:** X/100 → **Calibrated:** [Gap/Developing/Solid/Strong/Very Strong/Exceptional]
 - [Evidence with level and reasoning]
+- [Ownership indicators if present]
 
 [Repeat for each EGF competency...]
 
@@ -185,14 +254,33 @@ For each goal, document:
 - [Area for development, constructively framed]
 
 ## Recommendation
-[Overall assessment and guidance]
+**Rating:** [Meets Expectations / Exceeds Expectations / Needs Improvement]
+
+[1-2 sentence summary of overall performance without hedging.]
+
+**To move to [next level]:**
+- [Specific, actionable criteria needed to advance]
+- [Evidence that would demonstrate advancement]
+
+[If tenure < 6 months: Acknowledge ramp-up progress without implying trajectory toward exceeds.]
 ```
 
 ## Guidelines
 
+### Calibration
+- **Default to "Meets Expectations"** for solid performers completing assigned work well
+- **Avoid upward trajectory language** ("trending toward Exceeds", "on track for promotion") unless evidence is overwhelming
+- **Avoid hedging language** ("nearly", "almost", "could be considered") - give a clear rating
+- **Be specific about what would constitute "Exceeds"** - vague potential doesn't count
+- **For newer employees:** acknowledge good ramp-up as meeting expectations for their tenure, not as exceeding
+
+### Evidence Standards
 - Ground all feedback in specific contributions from the data
 - Connect achievements to documented goals and key results
 - Use objective language without superlatives
+- Distinguish between execution (completing assigned work) and ownership (driving initiatives)
+
+### Framework References
 - Reference EGF competencies from the rubric: Execution & Delivery, Skills & Knowledge, Teamwork & Communication, Influence & Leadership
 - Use the Engineering Growth Rubric to evaluate demonstrated behaviors at each level
 - Reference the Role Framework to set appropriate expectations for the engineer's role/sub-level

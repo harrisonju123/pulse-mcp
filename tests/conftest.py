@@ -2,7 +2,7 @@
 
 import pytest
 
-from ic_tracker.models import Config, GitHubConfig, JiraConfig, Team, TeamMember
+from work_tracker.models import Config, GitHubConfig, JiraConfig, Team, TeamMember
 
 
 @pytest.fixture

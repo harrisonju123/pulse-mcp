@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ic_tracker.models import CodeReview, Config, GitHubConfig, PullRequest, Team, TeamMember
-from ic_tracker.tools.pulse_tools import (
+from work_tracker.models import CodeReview, Config, GitHubConfig, PullRequest, Team, TeamMember
+from work_tracker.tools.pulse_tools import (
     _get_team_for_member,
     _validate_team_member,
     get_pulse_tools,
@@ -182,7 +182,7 @@ class TestHandleGetMemberPulse:
 
     @pytest.mark.asyncio
     async def test_successful_pulse(self, config, sample_prs, sample_reviews, sample_open_prs):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -229,7 +229,7 @@ class TestHandleGetMemberPulse:
 
     @pytest.mark.asyncio
     async def test_pr_includes_reviewers(self, config, sample_prs):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -249,7 +249,7 @@ class TestHandleGetMemberPulse:
 
     @pytest.mark.asyncio
     async def test_collaboration_tracking(self, config, sample_prs):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -269,7 +269,7 @@ class TestHandleGetMemberPulse:
 
     @pytest.mark.asyncio
     async def test_open_prs_includes_days_open(self, config, sample_open_prs):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -287,7 +287,7 @@ class TestHandleGetMemberPulse:
 
     @pytest.mark.asyncio
     async def test_handles_api_error_gracefully(self, config):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -301,7 +301,7 @@ class TestHandleGetMemberPulse:
 
     @pytest.mark.asyncio
     async def test_handles_partial_failures_with_warnings(self, config, sample_prs):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -356,7 +356,7 @@ class TestHandleGetPrDetails:
 
     @pytest.mark.asyncio
     async def test_categorizes_files_correctly(self, config, sample_files):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -374,7 +374,7 @@ class TestHandleGetPrDetails:
 
     @pytest.mark.asyncio
     async def test_calculates_feature_percentage(self, config, sample_files):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -392,7 +392,7 @@ class TestHandleGetPrDetails:
 
     @pytest.mark.asyncio
     async def test_includes_diff_when_requested(self, config, sample_files):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -414,7 +414,7 @@ index abc123..def456 100644
 
     @pytest.mark.asyncio
     async def test_handles_api_error(self, config):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
@@ -428,7 +428,7 @@ index abc123..def456 100644
 
     @pytest.mark.asyncio
     async def test_provides_analysis_hint(self, config, sample_files):
-        with patch("ic_tracker.tools.pulse_tools.GitHubClient") as MockClient:
+        with patch("work_tracker.tools.pulse_tools.GitHubClient") as MockClient:
             mock_client = MagicMock()
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)

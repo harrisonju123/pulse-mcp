@@ -4,21 +4,21 @@ import pytest
 import responses
 from responses import matchers
 
-from ic_tracker.clients.jira_client import JiraClient
+from work_tracker.clients.jira_client import JiraClient
 
 
 class TestJiraClientValidation:
     """Test input validation for JQL injection prevention."""
 
     def test_valid_issue_key(self, jira_config):
-        from ic_tracker.clients.jira_client import _validate_issue_key
+        from work_tracker.clients.jira_client import _validate_issue_key
         # These should not raise
         _validate_issue_key("PROJ-123")
         _validate_issue_key("AB-1")
         _validate_issue_key("TEST123-99999")
 
     def test_invalid_issue_key_injection_attempt(self, jira_config):
-        from ic_tracker.clients.jira_client import _validate_issue_key
+        from work_tracker.clients.jira_client import _validate_issue_key
         import pytest
 
         # These should raise ValueError
@@ -38,7 +38,7 @@ class TestJiraClientValidation:
             _validate_issue_key("123-ABC")
 
     def test_escape_jql_string(self, jira_config):
-        from ic_tracker.clients.jira_client import _escape_jql_string
+        from work_tracker.clients.jira_client import _escape_jql_string
 
         assert _escape_jql_string('normal') == 'normal'
         assert _escape_jql_string('with"quote') == 'with\\"quote'

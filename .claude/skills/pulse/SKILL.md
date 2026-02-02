@@ -1,10 +1,10 @@
 ---
 description: Generate qualitative pulse summary for person or team. Use when asked to "pulse", "team pulse", "what did [name] ship", "what's [team] working on", "qualitative summary".
 allowed-tools:
-  - mcp__ic-tracker__get_member_pulse
-  - mcp__ic-tracker__get_pr_details
-  - mcp__ic-tracker__get_teams
-  - mcp__ic-tracker__get_team_members
+  - mcp__work-tracker__get_member_pulse
+  - mcp__work-tracker__get_pr_details
+  - mcp__work-tracker__get_teams
+  - mcp__work-tracker__get_team_members
 ---
 
 # Pulse
@@ -23,8 +23,8 @@ Generate a qualitative summary of what someone (or a team) shipped, emphasizing 
 
 ### For Individual (e.g., `/pulse harrisonju123`)
 
-1. Call `mcp__ic-tracker__get_member_pulse` for the username
-2. For the most significant PRs (largest, most interesting titles), call `mcp__ic-tracker__get_pr_details` with `include_diff: true` to understand what was actually built
+1. Call `mcp__work-tracker__get_member_pulse` for the username
+2. For the most significant PRs (largest, most interesting titles), call `mcp__work-tracker__get_pr_details` with `include_diff: true` to understand what was actually built
 3. Analyze the diff content - focus on feature files, ignore generated/deps
 4. Group work by semantic theme based on actual code changes (not just PR titles)
 5. Write narrative: "**Shipped:** [theme summary]" with bullet points for grouped work
@@ -49,8 +49,8 @@ Focus your analysis on feature files. The diff content shows exactly what code w
 
 ### For Team (e.g., `/pulse market_expansion`)
 
-1. Call `mcp__ic-tracker__get_team_members` with team filter
-2. Call `mcp__ic-tracker__get_member_pulse` for each member
+1. Call `mcp__work-tracker__get_team_members` with team filter
+2. Call `mcp__work-tracker__get_member_pulse` for each member
 3. Write per-person narrative sections
 4. Add "Team Patterns" section highlighting:
    - Who works closely together (frequent_collaborators overlap)
@@ -59,7 +59,7 @@ Focus your analysis on feature files. The diff content shows exactly what code w
 
 ### For All Teams (e.g., `/pulse`)
 
-1. Call `mcp__ic-tracker__get_teams` to get team list
+1. Call `mcp__work-tracker__get_teams` to get team list
 2. For each team, follow the team workflow above
 3. Add cross-team patterns if any
 

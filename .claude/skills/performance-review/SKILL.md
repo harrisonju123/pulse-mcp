@@ -1,16 +1,16 @@
 ---
 description: This skill writes performance reviews for team members. Use when asked to "write performance review", "draft review", "create perf review", "evaluate performance", or "review feedback for [name]".
 allowed-tools:
-  - mcp__ic-tracker__get_github_contributions
-  - mcp__ic-tracker__get_confluence_contributions
-  - mcp__ic-tracker__get_team_members
-  - mcp__ic-tracker__get_contribution_trends
-  - mcp__ic-tracker__get_contribution_distribution
-  - mcp__ic-tracker__get_competency_analysis
-  - mcp__ic-tracker__get_peer_feedback
-  - mcp__ic-tracker__get_team_bandwidth
-  - mcp__ic-tracker__search_jira_issues
-  - mcp__ic-tracker__get_initiative_roadmap
+  - mcp__work-tracker__get_github_contributions
+  - mcp__work-tracker__get_confluence_contributions
+  - mcp__work-tracker__get_team_members
+  - mcp__work-tracker__get_contribution_trends
+  - mcp__work-tracker__get_contribution_distribution
+  - mcp__work-tracker__get_competency_analysis
+  - mcp__work-tracker__get_peer_feedback
+  - mcp__work-tracker__get_team_bandwidth
+  - mcp__work-tracker__search_jira_issues
+  - mcp__work-tracker__get_initiative_roadmap
   - Read
   - Glob
 ---
@@ -22,7 +22,7 @@ Generate a comprehensive performance review using contribution data and document
 ## Workflow
 
 1. **Identify the team member**
-   - Use `mcp__ic-tracker__get_team_members` to get available members
+   - Use `mcp__work-tracker__get_team_members` to get available members
    - If not specified, ask user which team member to review
 
 2. **Read the EGF reference documents**
@@ -33,14 +33,14 @@ Generate a comprehensive performance review using contribution data and document
    - Parse any date range from the user's request (see Date Ranges section below)
    - If no date range specified, default to last 90 days
    - Convert named ranges to explicit `start_date` and `end_date` parameters
-   - `mcp__ic-tracker__get_github_contributions` - PRs, reviews, lines changed, review turnaround
-   - `mcp__ic-tracker__get_confluence_contributions` - docs created/updated
-   - `mcp__ic-tracker__get_contribution_trends` - week-over-week or monthly trends
-   - `mcp__ic-tracker__get_contribution_distribution` - work areas and repo breadth
-   - `mcp__ic-tracker__get_competency_analysis` - EGF competency mapping
+   - `mcp__work-tracker__get_github_contributions` - PRs, reviews, lines changed, review turnaround
+   - `mcp__work-tracker__get_confluence_contributions` - docs created/updated
+   - `mcp__work-tracker__get_contribution_trends` - week-over-week or monthly trends
+   - `mcp__work-tracker__get_contribution_distribution` - work areas and repo breadth
+   - `mcp__work-tracker__get_competency_analysis` - EGF competency mapping
 
 4. **Gather peer feedback (if available)**
-   - `mcp__ic-tracker__get_peer_feedback` - read structured feedback from peers
+   - `mcp__work-tracker__get_peer_feedback` - read structured feedback from peers
    - Incorporate feedback themes into strengths and growth areas
 
 5. **Read the team member's goals**
@@ -160,7 +160,7 @@ Adjust expectations based on time in role:
 
 ## Competency Score Reinterpretation
 
-The `mcp__ic-tracker__get_competency_analysis` tool returns scores that tend toward inflation. Reinterpret them conservatively:
+The `mcp__work-tracker__get_competency_analysis` tool returns scores that tend toward inflation. Reinterpret them conservatively:
 
 | Tool Score | Skill Interpretation | Meaning |
 |------------|---------------------|---------|

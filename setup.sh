@@ -1,5 +1,5 @@
 #!/bin/bash
-# IC Tracker MCP Server Setup Script
+# Work Tracker MCP Server Setup Script
 # Works with Claude Code and Cursor
 
 set -e
@@ -23,7 +23,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "=== IC Tracker MCP Setup ==="
+echo "=== Work Tracker MCP Setup ==="
 echo
 
 # Check Python version
@@ -73,11 +73,11 @@ echo
 CLAUDE_CONFIG=$(cat <<EOF
 {
   "mcpServers": {
-    "ic-tracker": {
+    "work-tracker": {
       "command": "$SCRIPT_DIR/.venv/bin/python",
       "args": ["$SCRIPT_DIR/server.py"],
       "env": {
-        "IC_TRACKER_CONFIG": "$SCRIPT_DIR/config.json"
+        "WORK_TRACKER_CONFIG": "$SCRIPT_DIR/config.json"
       }
     }
   }
@@ -89,11 +89,11 @@ EOF
 CURSOR_CONFIG=$(cat <<EOF
 {
   "mcpServers": {
-    "ic-tracker": {
+    "work-tracker": {
       "command": "$SCRIPT_DIR/.venv/bin/python",
       "args": ["$SCRIPT_DIR/server.py"],
       "env": {
-        "IC_TRACKER_CONFIG": "$SCRIPT_DIR/config.json"
+        "WORK_TRACKER_CONFIG": "$SCRIPT_DIR/config.json"
       }
     }
   }
@@ -123,11 +123,11 @@ import json
 import sys
 
 new_server = {
-    'ic-tracker': {
+    'work-tracker': {
         'command': '$SCRIPT_DIR/.venv/bin/python',
         'args': ['$SCRIPT_DIR/server.py'],
         'env': {
-            'IC_TRACKER_CONFIG': '$SCRIPT_DIR/config.json'
+            'WORK_TRACKER_CONFIG': '$SCRIPT_DIR/config.json'
         }
     }
 }

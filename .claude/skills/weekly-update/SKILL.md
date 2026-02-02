@@ -1,11 +1,11 @@
 ---
 description: This skill generates weekly status updates. Use when asked to "write weekly update", "create status report", "summarize my week", "generate standup", "what did I work on", or "team update".
 allowed-tools:
-  - mcp__ic-tracker__get_github_contributions
-  - mcp__ic-tracker__get_confluence_contributions
-  - mcp__ic-tracker__get_team_members
-  - mcp__ic-tracker__get_team_bandwidth
-  - mcp__ic-tracker__search_jira_issues
+  - mcp__work-tracker__get_github_contributions
+  - mcp__work-tracker__get_confluence_contributions
+  - mcp__work-tracker__get_team_members
+  - mcp__work-tracker__get_team_bandwidth
+  - mcp__work-tracker__search_jira_issues
   - Read
   - Glob
 ---
@@ -22,14 +22,14 @@ Generate concise weekly status updates for individuals or teams.
    - Default: 7 days (adjustable)
 
 2. **Identify team member(s)**
-   - Use `mcp__ic-tracker__get_team_members` to resolve names to GitHub usernames
+   - Use `mcp__work-tracker__get_team_members` to resolve names to GitHub usernames
 
 3. **Fetch contribution data**
-   - `mcp__ic-tracker__get_github_contributions` with `days: 7`
-   - `mcp__ic-tracker__get_confluence_contributions` with `days: 7`
-   - For Jira work: `mcp__ic-tracker__search_jira_issues` with JQL like:
+   - `mcp__work-tracker__get_github_contributions` with `days: 7`
+   - `mcp__work-tracker__get_confluence_contributions` with `days: 7`
+   - For Jira work: `mcp__work-tracker__search_jira_issues` with JQL like:
      - `assignee = "account-id" AND updated >= -7d ORDER BY updated DESC`
-   - For team bandwidth: `mcp__ic-tracker__get_team_bandwidth`
+   - For team bandwidth: `mcp__work-tracker__get_team_bandwidth`
 
 4. **Optionally read goals** for context on how work aligns with objectives
 

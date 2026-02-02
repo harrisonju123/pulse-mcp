@@ -1,14 +1,14 @@
 ---
 description: This skill generates 1:1 meeting prep documents. Use when asked to "prep for 1:1", "1:1 prep", "one on one prep", "prepare for 1:1 with [name]", "what should I discuss with [name]".
 allowed-tools:
-  - mcp__ic-tracker__get_github_contributions
-  - mcp__ic-tracker__get_contribution_trends
-  - mcp__ic-tracker__get_team_bandwidth
-  - mcp__ic-tracker__get_peer_feedback
-  - mcp__ic-tracker__get_competency_analysis
-  - mcp__ic-tracker__get_initiative_roadmap
-  - mcp__ic-tracker__search_jira_issues
-  - mcp__ic-tracker__get_team_members
+  - mcp__work-tracker__get_github_contributions
+  - mcp__work-tracker__get_contribution_trends
+  - mcp__work-tracker__get_team_bandwidth
+  - mcp__work-tracker__get_peer_feedback
+  - mcp__work-tracker__get_competency_analysis
+  - mcp__work-tracker__get_initiative_roadmap
+  - mcp__work-tracker__search_jira_issues
+  - mcp__work-tracker__get_team_members
   - Read
   - Glob
 ---
@@ -28,15 +28,15 @@ Generate concise, actionable 1:1 meeting prep documents by aggregating data from
 ## Workflow
 
 1. **Identify team member**
-   - Use `mcp__ic-tracker__get_team_members` to get available members and resolve the name
+   - Use `mcp__work-tracker__get_team_members` to get available members and resolve the name
    - If not specified, ask which team member the 1:1 is with
 
 2. **Gather recent contributions (14 days)**
-   - `mcp__ic-tracker__get_github_contributions` with `days: 14`
+   - `mcp__work-tracker__get_github_contributions` with `days: 14`
    - Note PRs merged and reviews given
 
 3. **Get trend baseline**
-   - `mcp__ic-tracker__get_contribution_trends` with `period_type: "biweekly"`, `num_periods: 3`
+   - `mcp__work-tracker__get_contribution_trends` with `period_type: "biweekly"`, `num_periods: 3`
    - Compare current period to 6-week average
 
 4. **Get in-progress work**
@@ -58,18 +58,18 @@ Generate concise, actionable 1:1 meeting prep documents by aggregating data from
    - Parse Performance Goal sections (look for `### Performance Goal #N:` headers)
    - Extract goal title and count of Key Results (bullet points under "Key Results:")
    - If "Jira Epics/Initiatives" section exists, extract epic keys (e.g., `PROJ-123`)
-   - Query `mcp__ic-tracker__get_initiative_roadmap` for each epic to get progress %
+   - Query `mcp__work-tracker__get_initiative_roadmap` for each epic to get progress %
    - Skip this section if no goals file exists
 
 8. **Gather career progress data (if goals file exists)**
-   - Call `mcp__ic-tracker__get_competency_analysis` with `days: 90`
+   - Call `mcp__work-tracker__get_competency_analysis` with `days: 90`
    - Extract from goals file:
      - Current level from "Current Leveling" section (P2/P3/P4/P5)
      - Target level from "Long term goal" line
    - Skip this section if no goals file exists
 
 9. **Surface recent peer feedback (if any)**
-   - `mcp__ic-tracker__get_peer_feedback` for this user
+   - `mcp__work-tracker__get_peer_feedback` for this user
    - Only include if feedback exists
 
 10. **Generate prep document**

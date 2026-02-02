@@ -1,5 +1,7 @@
 {
   "_comment": "See README.md for full documentation. The 'confluence' and 'jira' sections are optional.",
+  "self": "your-github-username",
+  "_self_note": "Optional: Set 'self' to your GitHub username for IC self-tracking features (goals, reflections, self-assessment)",
   "github": {
     "token": "ghp_xxxxxxxxxxxx",
     "org": "yourcompany",

@@ -2,8 +2,8 @@
 
 import pytest
 
-from ic_tracker.tools.github_tools import handle_get_teams, handle_get_team_members
-from ic_tracker.models import Config, GitHubConfig, Team, TeamMember
+from work_tracker.tools.github_tools import handle_get_teams, handle_get_team_members
+from work_tracker.models import Config, GitHubConfig, Team, TeamMember
 
 
 @pytest.fixture

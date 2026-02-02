@@ -224,6 +224,17 @@ def get_github_tools() -> list[Tool]:
                 "required": ["github_username"],
             },
         ),
+        Tool(
+            name="get_self",
+            description=(
+                "Get the configured 'self' user info. Returns github_username and name if configured. "
+                "Used by IC-facing features to identify the current user."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
     ]
 
 
@@ -893,3 +904,34 @@ async def handle_get_competency_analysis(
         result["warnings"] = warnings
 
     return result
+
+
+async def handle_get_self(config: Config) -> dict:
+    """Get self-identification info.
+
+    Args:
+        config: Application configuration.
+
+    Returns:
+        Dict with self configuration info or error.
+    """
+    if not config.self_username:
+        return {
+            "configured": False,
+            "note": "No 'self' configured in config. Add '\"self\": \"your-github-username\"' to config.json"
+        }
+
+    member = config.self_member
+    if not member:
+        return {
+            "configured": True,
+            "github_username": config.self_username,
+            "error": "Self username not found in team members"
+        }
+
+    return {
+        "configured": True,
+        "github_username": config.self_username,
+        "name": member.name,
+        "atlassian_account_id": member.atlassian_account_id,
+    }

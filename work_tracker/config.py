@@ -1,4 +1,4 @@
-"""Configuration loading for IC Tracker."""
+"""Configuration loading for Work Tracker."""
 
 import json
 import os
@@ -15,33 +15,21 @@ TEAM_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
 
 
 class ConfigError(Exception):
-    """Raised when configuration is invalid or missing."""
     pass
 
 
 def _validate_project_key(key: str) -> bool:
-    """Check if a string is a valid Jira project key."""
     return bool(PROJECT_KEY_PATTERN.match(key))
 
 
 def load_config(config_path: str | None = None) -> Config:
-    """Load configuration from JSON file.
-
-    Args:
-        config_path: Path to config file. If None, uses IC_TRACKER_CONFIG env var.
-
-    Returns:
-        Validated Config object.
-
-    Raises:
-        ConfigError: If config file is missing or invalid.
-    """
     if config_path is None:
-        config_path = os.environ.get("IC_TRACKER_CONFIG")
+        # Check new env var first, fall back to old one for backward compatibility
+        config_path = os.environ.get("WORK_TRACKER_CONFIG") or os.environ.get("IC_TRACKER_CONFIG")
 
     if not config_path:
         raise ConfigError(
-            "No config path provided. Set IC_TRACKER_CONFIG environment variable "
+            "No config path provided. Set WORK_TRACKER_CONFIG environment variable "
             "or pass config_path argument."
         )
 
@@ -59,20 +47,10 @@ def load_config(config_path: str | None = None) -> Config:
 
 
 def _validate_team_id(team_id: str) -> bool:
-    """Check if a string is a valid team ID (lowercase alphanumeric with hyphens/underscores)."""
     return bool(TEAM_ID_PATTERN.match(team_id))
 
 
 def _parse_team_members(members_data: dict, section_name: str) -> dict[str, TeamMember]:
-    """Parse team members from config data.
-
-    Args:
-        members_data: Dict of github_username -> member data.
-        section_name: Section name for error messages.
-
-    Returns:
-        Dict of github_username -> TeamMember.
-    """
     members = {}
     for github_username, member_data in members_data.items():
         _validate_required_keys(
@@ -173,7 +151,6 @@ def _parse_teams(data: dict) -> dict[str, Team]:
 
 
 def _parse_config(data: dict) -> Config:
-    """Parse and validate configuration data."""
     _validate_required_keys(data, ["github"], "config")
 
     github_data = data["github"]
@@ -236,16 +213,30 @@ def _parse_config(data: dict) -> Config:
             epic_link_field=jira_data.get("epic_link_field", "customfield_10014"),
         )
 
+    # Parse self username (optional)
+    self_username = data.get("self")
+    if self_username:
+        # Get all usernames from all teams
+        all_usernames = set()
+        for team in teams.values():
+            all_usernames.update(team.members.keys())
+
+        if self_username not in all_usernames:
+            raise ConfigError(
+                f"'self' username '{self_username}' is not a configured team member. "
+                f"Available: {', '.join(sorted(all_usernames))}"
+            )
+
     return Config(
         github=github_config,
         teams=teams,
         confluence=confluence_config,
         jira=jira_config,
+        self_username=self_username,
     )
 
 
 def _validate_required_keys(data: dict, keys: list[str], section: str) -> None:
-    """Validate that all required keys are present."""
     missing = [k for k in keys if k not in data]
     if missing:
         raise ConfigError(

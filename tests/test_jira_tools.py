@@ -3,7 +3,7 @@
 import pytest
 import responses
 
-from ic_tracker.tools.jira_tools import (
+from work_tracker.tools.jira_tools import (
     handle_get_initiative_roadmap,
     handle_get_team_bandwidth,
     handle_search_jira_issues,
@@ -11,7 +11,7 @@ from ic_tracker.tools.jira_tools import (
     _calculate_allocation,
     _issue_to_dict,
 )
-from ic_tracker.models import JiraIssue, Config, Team
+from work_tracker.models import JiraIssue, Config, Team
 from datetime import datetime, timezone
 
 

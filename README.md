@@ -1,13 +1,17 @@
 # Pulse MCP
 
-An MCP server that gives AI assistants (Claude, Cursor) visibility into your team's work across GitHub, Jira, and Confluence.
+MCP server for tracking engineering work across GitHub, Jira, and Confluence. For managers tracking teams AND ICs tracking themselves.
 
-**Ask questions like:**
+**Managers:**
 - "What did Sarah ship this week?"
-- "Prep me for my 1:1 with Alex"
-- "Show the roadmap for PROJ-123"
-- "Write my weekly update"
+- "Prep for my 1:1 with Alex"
 - "Draft a performance review for Jordan"
+
+**Individual Contributors:**
+- "Add a goal to ship 10 PRs by Q2"
+- "What have I accomplished this quarter?"
+- "Generate my brag doc"
+- "Write my self-assessment"
 
 ## Quick Start (GitHub only)
 
@@ -29,6 +33,7 @@ cd pulse-mcp
 **Minimal config.json:**
 ```json
 {
+  "self": "octocat",
   "github": {
     "token": "ghp_your_token_here",
     "org": "your-github-org",
@@ -40,6 +45,8 @@ cd pulse-mcp
   }
 }
 ```
+
+Add `"self": "your-github-username"` to enable IC features (goals, journal, self-assessment).
 
 The setup script prints MCP config to copy into Claude Code or Cursor. Restart after adding it.
 
@@ -124,17 +131,29 @@ Then restart the app.
 | `get_initiative_roadmap` | Epics under an initiative with progress |
 | `get_team_bandwidth` | Work distribution across team |
 | `search_jira_issues` | Flexible JQL search |
+| **IC Tools** | |
+| `add_goal` | Add personal/professional goal with key results |
+| `get_goals` | List goals (filter by status) |
+| `update_goal_progress` | Update goal status, add progress notes |
+| `add_journal_entry` | Add personal reflection with tags |
+| `get_journal_entries` | Get journal entries by date range |
+| `search_journal` | Search journal by keyword |
 
 ## Skills (Claude Code)
 
-Built-in skills that combine multiple tools:
-
+**For Managers:**
 | Skill | What it does |
 |-------|--------------|
 | `/pulse [name]` | Qualitative summary of what someone shipped |
 | `/one-on-one-prep [name]` | Meeting prep with blockers, goals, discussion topics |
-| `/weekly-update` | Generate your weekly status report |
 | `/performance-review [name]` | Draft a review using contribution data |
+
+**For ICs (requires `self` in config):**
+| Skill | What it does |
+|-------|--------------|
+| `/weekly-update` | Generate your weekly status report |
+| `/self-assessment` | Reflect on your recent work and growth |
+| `/brag-doc` | Generate accomplishment summary for promotion packets |
 
 ## Multi-Team Support
 
@@ -162,7 +181,33 @@ Organize members into teams:
 
 Then ask: "What did the platform team ship?" or "/pulse platform"
 
-## Goal Files
+## IC Features
+
+Set `"self": "your-github-username"` in config.json to enable personal tracking:
+
+### Goals
+Track personal and professional goals with OKR-style key results:
+
+```
+"Add a goal to ship 10 PRs by Q2"
+"Show my active goals"
+"Update goal: shipped 7/10 PRs"
+```
+
+Goals are stored in `goals/{username}-goals.json`.
+
+### Journal
+Personal reflection and notes:
+
+```
+"Add a journal entry about today's work"
+"Show my journal entries from last week"
+"Search my journal for 'performance review'"
+```
+
+Journal entries are stored as markdown in `reflections/{username}/YYYY-MM-DD.md` with tags.
+
+## Goal Files for Reviews
 
 For performance reviews, store goals in `goals/<name>.md`:
 

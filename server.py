@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""IC Tracker MCP Server - Fetch GitHub/Confluence contribution data."""
+"""Work Tracker MCP Server - Fetch GitHub/Confluence contribution data."""
 
 import argparse
 import asyncio
@@ -12,32 +12,46 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent
 
-from ic_tracker.config import ConfigError, load_config
-from ic_tracker.tools.confluence_tools import (
+from work_tracker.config import ConfigError, load_config
+from work_tracker.tools.confluence_tools import (
     get_confluence_tools,
     handle_get_confluence_contributions,
 )
-from ic_tracker.tools.feedback_tools import (
+from work_tracker.tools.feedback_tools import (
     get_feedback_tools,
     handle_get_peer_feedback,
 )
-from ic_tracker.tools.github_tools import (
+from work_tracker.tools.github_tools import (
     get_github_tools,
     handle_get_competency_analysis,
     handle_get_contribution_distribution,
     handle_get_contribution_trends,
     handle_get_github_contributions,
+    handle_get_self,
     handle_get_team_members,
     handle_get_teams,
 )
-from ic_tracker.tools.jira_tools import (
+from work_tracker.tools.goal_tools import (
+    get_goal_tools,
+    handle_add_goal,
+    handle_get_goal_progress,
+    handle_get_goals,
+    handle_update_goal_progress,
+)
+from work_tracker.tools.journal_tools import (
+    get_journal_tools,
+    handle_add_journal_entry,
+    handle_get_journal_entries,
+    handle_search_journal,
+)
+from work_tracker.tools.jira_tools import (
     get_jira_tools,
     handle_get_initiative_roadmap,
     handle_get_team_bandwidth,
     handle_search_jira_issues,
     handle_update_jira_issue,
 )
-from ic_tracker.tools.pulse_tools import (
+from work_tracker.tools.pulse_tools import (
     get_pulse_tools,
     handle_get_member_pulse,
     handle_get_pr_details,
@@ -50,7 +64,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-server = Server("ic-tracker")
+server = Server("work-tracker")
 config = None
 
 
@@ -60,6 +74,8 @@ async def list_tools():
     tools = get_github_tools()
     tools += get_feedback_tools()
     tools += get_pulse_tools()
+    tools += get_goal_tools()
+    tools += get_journal_tools()
     if config and config.confluence:
         tools += get_confluence_tools()
     if config and config.jira:
@@ -148,6 +164,8 @@ async def call_tool(name: str, arguments: dict):
             result = await handle_get_teams(config)
         elif name == "get_team_members":
             result = await handle_get_team_members(config, team=arguments.get("team"))
+        elif name == "get_self":
+            result = await handle_get_self(config)
         elif name == "get_confluence_contributions":
             result = await handle_get_confluence_contributions(
                 config,
@@ -222,6 +240,61 @@ async def call_tool(name: str, arguments: dict):
                 repo=arguments.get("repo"),
                 pr_number=arguments.get("pr_number"),
                 include_diff=arguments.get("include_diff", False),
+            )
+        elif name == "get_goals":
+            result = await handle_get_goals(
+                config,
+                github_username=arguments.get("github_username"),
+                status=arguments.get("status", "active"),
+            )
+        elif name == "add_goal":
+            result = await handle_add_goal(
+                config,
+                title=arguments.get("title"),
+                description=arguments.get("description"),
+                category=arguments.get("category", "general"),
+                target_date=arguments.get("target_date"),
+                key_results=arguments.get("key_results"),
+                github_username=arguments.get("github_username"),
+            )
+        elif name == "update_goal_progress":
+            result = await handle_update_goal_progress(
+                config,
+                goal_id=arguments.get("goal_id"),
+                status=arguments.get("status"),
+                progress_note=arguments.get("progress_note"),
+                key_result_updates=arguments.get("key_result_updates"),
+                github_username=arguments.get("github_username"),
+            )
+        elif name == "get_goal_progress":
+            result = await handle_get_goal_progress(
+                config,
+                goal_id=arguments.get("goal_id"),
+                github_username=arguments.get("github_username"),
+            )
+        elif name == "add_journal_entry":
+            result = await handle_add_journal_entry(
+                config,
+                content=arguments.get("content"),
+                title=arguments.get("title"),
+                tags=arguments.get("tags"),
+                github_username=arguments.get("github_username"),
+            )
+        elif name == "get_journal_entries":
+            result = await handle_get_journal_entries(
+                config,
+                days=arguments.get("days", 30),
+                start_date=arguments.get("start_date"),
+                end_date=arguments.get("end_date"),
+                tags=arguments.get("tags"),
+                github_username=arguments.get("github_username"),
+            )
+        elif name == "search_journal":
+            result = await handle_search_journal(
+                config,
+                query=arguments.get("query"),
+                days=arguments.get("days", 90),
+                github_username=arguments.get("github_username"),
             )
         else:
             result = {"error": f"Unknown tool: {name}"}

@@ -1,4 +1,4 @@
-"""Data models for IC Tracker."""
+"""Data models for Work Tracker."""
 
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -50,6 +50,7 @@ class Config:
     teams: dict[str, Team]
     confluence: Optional[ConfluenceConfig] = None
     jira: Optional[JiraConfig] = None
+    self_username: Optional[str] = None  # GitHub username for IC self-tracking
 
     @property
     def team_members(self) -> dict[str, TeamMember]:
@@ -58,6 +59,13 @@ class Config:
         for team in self.teams.values():
             members.update(team.members)
         return members
+
+    @property
+    def self_member(self) -> Optional[TeamMember]:
+        """Get the TeamMember for self if configured and valid."""
+        if self.self_username and self.self_username in self.team_members:
+            return self.team_members[self.self_username]
+        return None
 
 
 @dataclass
@@ -205,3 +213,27 @@ class ContributionDistribution:
     by_area: dict[str, int]  # area (frontend/backend/infra/etc) -> pr_count
     by_file_type: dict[str, int]  # file extension -> file_count
     files_touched: list[dict]  # [{"path": str, "repo": str, "area": str}]
+
+
+@dataclass
+class GoalKeyResult:
+    """A measurable key result for a goal."""
+    description: str
+    target: Optional[str] = None  # e.g., "100%", "5 PRs", "Q2 2026"
+    current: Optional[str] = None  # Current progress
+    status: str = "pending"  # pending, in_progress, completed, blocked
+
+
+@dataclass
+class Goal:
+    """A personal or professional goal."""
+    id: str  # Unique identifier (slug)
+    title: str
+    description: Optional[str] = None
+    category: str = "general"  # career, learning, project, health, general
+    target_date: Optional[str] = None  # YYYY-MM-DD or YYYY-QN
+    key_results: list[GoalKeyResult] = field(default_factory=list)
+    status: str = "active"  # active, completed, archived
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    progress_notes: list[dict] = field(default_factory=list)  # [{date, note}]

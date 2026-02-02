@@ -1,7 +1,46 @@
-"""Shared utilities for ic_tracker."""
+"""Shared utilities for Work Tracker."""
 
 import re
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .models import Config
+
+# Constants for data limits
+MAX_GOALS_PER_USER = 100
+MAX_JOURNAL_FILE_SIZE_MB = 1
+MAX_JOURNAL_ENTRIES_PER_DAY = 50
+PREVIEW_LENGTH = 200
+GOAL_ID_MAX_LENGTH = 50
+
+
+def utc_now() -> datetime:
+    """Always timezone-aware to prevent datetime comparison bugs."""
+    return datetime.now(timezone.utc)
+
+
+def resolve_username(config: "Config", github_username: str | None) -> str | dict:
+    """Defaults to config.self_username when no explicit username provided."""
+    if github_username:
+        if github_username not in config.team_members:
+            return {"error": f"Unknown user: {github_username}"}
+        return github_username
+
+    if config.self_username:
+        return config.self_username
+
+    return {"error": "No github_username provided and 'self' not configured"}
+
+
+def sanitize_username_for_filesystem(username: str) -> str:
+    """Prevent path traversal attacks."""
+    safe_username = re.sub(r'[^a-zA-Z0-9_-]', '', username)
+    if safe_username != username:
+        raise ValueError(f"Invalid username for filesystem: {username}")
+    if not safe_username:
+        raise ValueError("Username cannot be empty")
+    return safe_username
 
 
 def parse_date_range(
@@ -9,16 +48,6 @@ def parse_date_range(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> tuple[datetime, datetime] | dict:
-    """Parse date range from parameters.
-
-    Args:
-        days: Number of days to look back (used if start_date not provided).
-        start_date: Start date in YYYY-MM-DD format.
-        end_date: End date in YYYY-MM-DD format.
-
-    Returns:
-        Tuple of (since, until) datetimes, or error dict if validation fails.
-    """
     if start_date:
         try:
             since = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -84,18 +113,7 @@ AREA_PATTERNS = [
 
 
 def infer_area_from_path(file_path: str) -> str:
-    """Infer the work area from a file path.
-
-    Uses pattern matching to categorize files into areas like
-    frontend, backend, infrastructure, data, testing, documentation,
-    or configuration.
-
-    Args:
-        file_path: Path to the file (can be relative or absolute).
-
-    Returns:
-        Inferred area string, or "other" if no pattern matches.
-    """
+    """Pattern matching to categorize frontend, backend, infrastructure, data, testing, docs, config."""
     for pattern, area in AREA_PATTERNS:
         if re.search(pattern, file_path, re.IGNORECASE):
             return area
@@ -103,14 +121,6 @@ def infer_area_from_path(file_path: str) -> str:
 
 
 def get_file_extension(file_path: str) -> str:
-    """Extract file extension from path.
-
-    Args:
-        file_path: Path to the file.
-
-    Returns:
-        File extension without the dot, or empty string if no extension.
-    """
     match = re.search(r"\.([^./]+)$", file_path)
     return match.group(1).lower() if match else ""
 
@@ -175,14 +185,7 @@ TEST_FILE_PATTERNS = [
 
 
 def categorize_file(file_path: str) -> str:
-    """Categorize a file as feature work, test, or noise.
-
-    Args:
-        file_path: Path to the file.
-
-    Returns:
-        Category: "feature", "test", "deps", "vendor", "generated", "build", "snapshot", "ide"
-    """
+    """Distinguish feature work from tests, generated code, deps, build artifacts."""
     # Check generated/noise patterns first
     for pattern, category in GENERATED_FILE_PATTERNS:
         if re.search(pattern, file_path, re.IGNORECASE):
@@ -198,12 +201,4 @@ def categorize_file(file_path: str) -> str:
 
 
 def is_feature_file(file_path: str) -> bool:
-    """Check if a file represents actual feature work.
-
-    Args:
-        file_path: Path to the file.
-
-    Returns:
-        True if the file is feature work (not generated, deps, tests, etc.)
-    """
     return categorize_file(file_path) == "feature"

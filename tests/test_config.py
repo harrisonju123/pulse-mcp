@@ -2,7 +2,7 @@
 
 import pytest
 
-from ic_tracker.config import ConfigError, _validate_project_key, _validate_team_id, _parse_config
+from work_tracker.config import ConfigError, _validate_project_key, _validate_team_id, _parse_config
 
 
 class TestProjectKeyValidation:
@@ -284,3 +284,61 @@ class TestMultiTeamConfig:
 
         with pytest.raises(ConfigError, match="Missing required keys"):
             _parse_config(data)
+
+
+class TestSelfConfig:
+    """Test self-identification configuration."""
+
+    def test_valid_self_config(self):
+        data = {
+            "github": {"token": "gh-token", "org": "testorg"},
+            "self": "alice",
+            "teams": {
+                "platform": {
+                    "name": "Platform Team",
+                    "members": {"alice": {"atlassian_account_id": "acc-1", "name": "Alice"}},
+                },
+            },
+        }
+        config = _parse_config(data)
+        assert config.self_username == "alice"
+        assert config.self_member is not None
+        assert config.self_member.name == "Alice"
+
+    def test_self_optional(self):
+        data = {
+            "github": {"token": "gh-token", "org": "testorg"},
+            "team_members": {"alice": {"atlassian_account_id": "acc-1", "name": "Alice"}},
+        }
+        config = _parse_config(data)
+        assert config.self_username is None
+        assert config.self_member is None
+
+    def test_invalid_self_rejected(self):
+        data = {
+            "github": {"token": "gh-token", "org": "testorg"},
+            "self": "unknown-user",
+            "team_members": {"alice": {"atlassian_account_id": "acc-1", "name": "Alice"}},
+        }
+        with pytest.raises(ConfigError, match="not a configured team member"):
+            _parse_config(data)
+
+    def test_self_with_multi_team(self):
+        data = {
+            "github": {"token": "gh-token", "org": "testorg"},
+            "self": "bob",
+            "teams": {
+                "platform": {
+                    "name": "Platform Team",
+                    "members": {"alice": {"atlassian_account_id": "acc-1", "name": "Alice"}},
+                },
+                "product": {
+                    "name": "Product Team",
+                    "members": {"bob": {"atlassian_account_id": "acc-2", "name": "Bob"}},
+                },
+            },
+        }
+        config = _parse_config(data)
+        assert config.self_username == "bob"
+        assert config.self_member is not None
+        assert config.self_member.name == "Bob"

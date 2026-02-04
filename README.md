@@ -1,17 +1,26 @@
 # Pulse MCP
 
-MCP server for tracking engineering work across GitHub, Jira, and Confluence. For managers tracking teams AND ICs tracking themselves.
+MCP server for tracking engineering work across GitHub, Jira, and Confluence. Built for **everyone** on the team—whether you're tracking your own work or supporting others.
 
-**Managers:**
+## Who Is This For?
+
+### Individual Contributors
+Track your own contributions, set goals, and build your narrative for promotions and reviews.
+
+- "What have I shipped this quarter?"
+- "Generate my brag doc for promotion"
+- "Write my self-assessment"
+- "Add a goal to ship 10 PRs by Q2"
+- "What did I work on last week?" → auto-generate weekly updates
+- "Journal: Had a great pairing session on the auth refactor"
+
+### Tech Leads & Managers
+Get visibility into team contributions and streamline people processes.
+
 - "What did Sarah ship this week?"
 - "Prep for my 1:1 with Alex"
 - "Draft a performance review for Jordan"
-
-**Individual Contributors:**
-- "Add a goal to ship 10 PRs by Q2"
-- "What have I accomplished this quarter?"
-- "Generate my brag doc"
-- "Write my self-assessment"
+- "Show me the team's contribution trends"
 
 ## Quick Start (GitHub only)
 
@@ -19,7 +28,7 @@ The fastest way to get started - just GitHub, no Jira/Confluence needed.
 
 ```bash
 # 1. Clone and setup
-git clone https://github.com/YOUR_USERNAME/pulse-mcp.git
+git clone https://github.com/harrisonju123/pulse-mcp.git
 cd pulse-mcp
 ./setup.sh
 
@@ -30,39 +39,46 @@ cd pulse-mcp
 # 3. Edit config.json with your token and team
 ```
 
-**Minimal config.json:**
+**Minimal config.json (for personal use):**
 ```json
 {
-  "self": "octocat",
+  "self": "your-github-username",
   "github": {
     "token": "ghp_your_token_here",
     "org": "your-github-org",
     "repos": []
   },
   "team_members": {
-    "octocat": { "atlassian_account_id": "N/A", "name": "Octocat" },
-    "hubot": { "atlassian_account_id": "N/A", "name": "Hubot" }
+    "your-github-username": { "atlassian_account_id": "N/A", "name": "Your Name" }
   }
 }
 ```
 
-Add `"self": "your-github-username"` to enable IC features (goals, journal, self-assessment).
+The `"self"` field enables personal features: goals, journal, self-assessment, brag docs, and weekly updates.
+
+**Want to track teammates too?** Just add them to `team_members`.
 
 The setup script prints MCP config to copy into Claude Code or Cursor. Restart after adding it.
 
 ## What You Can Do
 
-### Track contributions
+### For yourself (IC mode)
+```
+"What did I ship last month?"
+"Write my weekly update"          → /weekly-update
+"Generate my brag doc"            → /brag-doc
+"Write my self-assessment"        → /self-assessment
+"Add a goal: improve test coverage to 80%"
+"Show my active goals"
+"Journal: finally cracked the caching bug"
+```
+
+### For your team
 ```
 "What did @alice ship in the last 2 weeks?"
 "Show me contribution trends for the team"
 "Who reviewed the most PRs this month?"
-```
-
-### Prep for meetings
-```
 "Prep for my 1:1 with Bob"        → /one-on-one-prep
-"Write my weekly update"          → /weekly-update
 "Draft a review for Carol"        → /performance-review
 ```
 
@@ -141,19 +157,19 @@ Then restart the app.
 
 ## Skills (Claude Code)
 
-**For Managers:**
-| Skill | What it does |
-|-------|--------------|
-| `/pulse [name]` | Qualitative summary of what someone shipped |
-| `/one-on-one-prep [name]` | Meeting prep with blockers, goals, discussion topics |
-| `/performance-review [name]` | Draft a review using contribution data |
-
-**For ICs (requires `self` in config):**
+**For Everyone:**
 | Skill | What it does |
 |-------|--------------|
 | `/weekly-update` | Generate your weekly status report |
 | `/self-assessment` | Reflect on your recent work and growth |
 | `/brag-doc` | Generate accomplishment summary for promotion packets |
+| `/pulse [name]` | Qualitative summary of what someone (or you) shipped |
+
+**For Managers/Leads:**
+| Skill | What it does |
+|-------|--------------|
+| `/one-on-one-prep [name]` | Meeting prep with blockers, goals, discussion topics |
+| `/performance-review [name]` | Draft a review using contribution data |
 
 ## Multi-Team Support
 
@@ -181,9 +197,9 @@ Organize members into teams:
 
 Then ask: "What did the platform team ship?" or "/pulse platform"
 
-## IC Features
+## Personal Tracking Features
 
-Set `"self": "your-github-username"` in config.json to enable personal tracking:
+Set `"self": "your-github-username"` in config.json to unlock personal productivity tools:
 
 ### Goals
 Track personal and professional goals with OKR-style key results:

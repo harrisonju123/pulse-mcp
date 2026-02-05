@@ -272,13 +272,11 @@ async def handle_get_github_contributions(
 
     with GitHubClient(config.github) as client:
         try:
-            prs = client.search_prs(github_username, since, until)
+            merged_prs = client.search_merged_prs(github_username, since, until)
         except Exception as e:
             logger.error(f"GitHub PR search failed: {e}")
             return {"error": f"Failed to fetch GitHub PRs: {str(e)}"}
 
-        # Filter to merged PRs and fetch stats in parallel
-        merged_prs = [pr for pr in prs if pr.merged]
         stats_map = client.get_pr_stats_batch(merged_prs)
 
         for pr in merged_prs:
@@ -581,14 +579,12 @@ async def handle_get_contribution_trends(
         overall_end = periods[-1][1]
 
         try:
-            all_prs = client.search_prs(github_username, overall_start, overall_end)
+            merged_prs = client.search_merged_prs(github_username, overall_start, overall_end)
             all_reviews = client.get_reviews_by_user(github_username, overall_start, overall_end)
         except Exception as e:
             logger.error(f"GitHub search failed: {e}")
             return {"error": f"Failed to fetch GitHub data: {str(e)}"}
 
-        # Fetch stats for all merged PRs in parallel
-        merged_prs = [pr for pr in all_prs if pr.merged]
         stats_map = client.get_pr_stats_batch(merged_prs)
 
         # Group PRs and reviews by period
@@ -611,19 +607,19 @@ async def handle_get_contribution_trends(
                 "lines_removed": 0,
             }
 
-            # Filter PRs for this period
+            # Filter PRs for this period by merge date
             for pr in merged_prs:
-                pr_created = _ensure_timezone_aware(pr.created_at)
-                if pr_created and start_date <= pr_created <= end_date:
+                pr_merged = _ensure_timezone_aware(pr.merged_at)
+                if pr_merged and start_date <= pr_merged < end_date:
                     period_data["prs_merged"] += 1
                     stats = stats_map.get((pr.repo, pr.number), {"additions": 0, "deletions": 0})
                     period_data["lines_added"] += stats.get("additions", 0)
                     period_data["lines_removed"] += stats.get("deletions", 0)
 
-            # Filter reviews for this period (based on PR creation date)
+            # Filter reviews for this period
             for review in all_reviews:
                 review_submitted = _ensure_timezone_aware(review.submitted_at)
-                if review_submitted and start_date <= review_submitted <= end_date:
+                if review_submitted and start_date <= review_submitted < end_date:
                     period_data["reviews_given"] += 1
 
             period_contributions.append(period_data)
@@ -700,13 +696,11 @@ async def handle_get_contribution_distribution(
 
     with GitHubClient(config.github) as client:
         try:
-            prs = client.search_prs(github_username, since, until)
+            merged_prs = client.search_merged_prs(github_username, since, until)
         except Exception as e:
             logger.error(f"GitHub PR search failed: {e}")
             return {"error": f"Failed to fetch GitHub PRs: {str(e)}"}
 
-        # Filter to merged PRs
-        merged_prs = [pr for pr in prs if pr.merged]
         total_merged = len(merged_prs)
 
         # Count by repo for all merged PRs
@@ -812,12 +806,10 @@ async def handle_get_competency_analysis(
 
     with GitHubClient(config.github) as client:
         try:
-            prs = client.search_prs(github_username, since, until)
+            merged_prs = client.search_merged_prs(github_username, since, until)
             by_repo: dict[str, int] = defaultdict(int)
             by_area: dict[str, int] = defaultdict(int)
 
-            # Filter to merged PRs and fetch stats/files in parallel
-            merged_prs = [pr for pr in prs if pr.merged]
             stats_map = client.get_pr_stats_batch(merged_prs)
             files_map = client.get_pr_files_batch(merged_prs)
 

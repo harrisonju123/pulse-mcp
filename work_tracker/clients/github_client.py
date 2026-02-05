@@ -145,6 +145,38 @@ class GitHubClient:
 
         return prs
 
+    def search_merged_prs(
+        self,
+        author: str,
+        since: datetime,
+        until: datetime | None = None,
+    ) -> list[PullRequest]:
+        """Search for merged PRs by merge date.
+
+        Uses `is:merged merged:` qualifiers so PRs created before `since`
+        but merged within the window are included.
+
+        Args:
+            author: GitHub username.
+            since: Start date for merge date filter.
+            until: End date for merge date filter (optional).
+
+        Returns:
+            List of PullRequest objects (all guaranteed merged).
+        """
+        date_filter = f"merged:>={since.strftime('%Y-%m-%d')}"
+        if until:
+            date_filter = f"merged:{since.strftime('%Y-%m-%d')}..{until.strftime('%Y-%m-%d')}"
+
+        query = f"type:pr is:merged author:{author} org:{self.config.org} {date_filter}"
+
+        prs = []
+        for item in self._paginate_search("issues", query):
+            pr = self._parse_pr_from_search(item)
+            prs.append(pr)
+
+        return prs
+
     def get_pr_stats(self, owner: str, repo: str, number: int) -> dict[str, int]:
         """Get additions/deletions for a PR.
 

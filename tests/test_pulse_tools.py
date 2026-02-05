@@ -187,8 +187,8 @@ class TestHandleGetMemberPulse:
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
 
-            # Mock search_prs to return sample PRs
-            mock_client.search_prs.return_value = sample_prs
+            # Mock search_merged_prs to return sample PRs
+            mock_client.search_merged_prs.return_value = sample_prs
 
             # Mock get_reviewers_for_pr_batch
             mock_client.get_reviewers_for_pr_batch.return_value = {
@@ -234,7 +234,7 @@ class TestHandleGetMemberPulse:
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
 
-            mock_client.search_prs.return_value = sample_prs
+            mock_client.search_merged_prs.return_value = sample_prs
             mock_client.get_reviewers_for_pr_batch.return_value = {
                 ("main-repo", 100): ["reviewer1", "reviewer2"],
                 ("main-repo", 105): ["reviewer1"],
@@ -254,7 +254,7 @@ class TestHandleGetMemberPulse:
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
 
-            mock_client.search_prs.return_value = sample_prs
+            mock_client.search_merged_prs.return_value = sample_prs
             mock_client.get_reviewers_for_pr_batch.return_value = {
                 ("main-repo", 100): ["reviewer1"],
                 ("main-repo", 105): ["reviewer1"],
@@ -274,7 +274,7 @@ class TestHandleGetMemberPulse:
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
 
-            mock_client.search_prs.return_value = []
+            mock_client.search_merged_prs.return_value = []
             mock_client.get_reviewers_for_pr_batch.return_value = {}
             mock_client.get_reviews_by_user.return_value = []
             mock_client.search_open_prs.return_value = sample_open_prs
@@ -292,7 +292,7 @@ class TestHandleGetMemberPulse:
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
 
-            mock_client.search_prs.side_effect = Exception("API error")
+            mock_client.search_merged_prs.side_effect = Exception("API error")
 
             result = await handle_get_member_pulse(config, "testuser", days=14)
 
@@ -306,7 +306,7 @@ class TestHandleGetMemberPulse:
             MockClient.return_value.__enter__ = MagicMock(return_value=mock_client)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
 
-            mock_client.search_prs.return_value = sample_prs
+            mock_client.search_merged_prs.return_value = sample_prs
             mock_client.get_reviewers_for_pr_batch.return_value = {}
             mock_client.get_reviews_by_user.side_effect = Exception("Review API error")
             mock_client.search_open_prs.side_effect = Exception("Open PR API error")

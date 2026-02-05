@@ -147,8 +147,7 @@ async def handle_get_member_pulse(
     with GitHubClient(config.github) as client:
         # Fetch merged PRs
         try:
-            prs = client.search_prs(github_username, since, until)
-            merged_prs = [pr for pr in prs if pr.merged]
+            merged_prs = client.search_merged_prs(github_username, since, until)
 
             # Fetch reviewers for each merged PR in batch
             reviewers_map = client.get_reviewers_for_pr_batch(merged_prs)
